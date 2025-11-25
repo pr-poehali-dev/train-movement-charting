@@ -243,8 +243,8 @@ const Index = () => {
     const img = new Image();
     
     const pxPerMm = 3.7795275591;
-    const svgWidth = parseFloat(svgClone.getAttribute('width') || '5820');
-    const svgHeight = parseFloat(svgClone.getAttribute('height') || '700');
+    const svgWidth = parseFloat(svgClone.getAttribute('width') || '2478');
+    const svgHeight = parseFloat(svgClone.getAttribute('height') || '500');
     
     canvas.width = svgWidth;
     canvas.height = svgHeight;
@@ -716,21 +716,21 @@ const Index = () => {
                 <div style={{ 
                   transform: `scale(${zoom})`,
                   transformOrigin: 'top left',
-                  width: '5820px',
-                  height: '700px'
+                  width: '2478px',
+                  height: '500px'
                 }}>
                   <svg 
                     ref={svgRef}
-                    width="5820"
-                    height="700"
+                    width="2478"
+                    height="500"
                     className="border border-border rounded-lg bg-card"
                   >
                   <rect width="100%" height="100%" fill="hsl(var(--card))" />
                   
-                  {/* Сетка времени (10мм = 10 минут, 24 часа = 144 интервала по 10 мин) */}
+                  {/* Сетка времени (4мм = 10 минут, 4мм ≈ 15.12px, 24 часа = 144 интервала) */}
                   {Array.from({ length: 145 }, (_, i) => {
                     if (i > 144) return null;
-                    const x = 300 + i * 37.8;
+                    const x = 150 + i * 15.12;
                     const hour = Math.floor(i / 6);
                     const minute = (i % 6) * 10;
                     const isHourMark = minute === 0;
@@ -742,7 +742,7 @@ const Index = () => {
                           x1={x}
                           y1="50"
                           x2={x}
-                          y2="680"
+                          y2="480"
                           stroke="#000000"
                           strokeWidth={isHourMark ? '2' : '1'}
                           strokeDasharray={isHalfHourMark ? '5,5' : '0'}
@@ -763,43 +763,67 @@ const Index = () => {
                     );
                   })}
                   
-                  {/* Горизонтальные линии станций (10мм = 1км, 10мм ≈ 37.8px) */}
+                  {/* Заголовок "Расстояние (км)" */}
+                  <rect
+                    x="0"
+                    y="50"
+                    width="50"
+                    height="30"
+                    fill="#FFFFFF"
+                    stroke="#000000"
+                    strokeWidth="2"
+                  />
+                  <text
+                    x="25"
+                    y="65"
+                    textAnchor="middle"
+                    fill="#000000"
+                    fontSize="9"
+                    fontWeight="600"
+                  >
+                    Расст.
+                  </text>
+                  <text
+                    x="25"
+                    y="75"
+                    textAnchor="middle"
+                    fill="#000000"
+                    fontSize="9"
+                    fontWeight="600"
+                  >
+                    (км)
+                  </text>
+                  
+                  {/* Горизонтальные линии станций (2мм = 1км, 2мм ≈ 7.56px) */}
                   {stations
                     .sort((a, b) => (b.distance_km || b.position) - (a.distance_km || a.position))
                     .map((station, i, arr) => {
                       const distance = station.distance_km || station.position;
-                      const y = 80 + distance * 37.8;
+                      const y = 80 + distance * 7.56;
                       
                       const prevStation = i > 0 ? arr[i - 1] : null;
                       const prevDistance = prevStation ? (prevStation.distance_km || prevStation.position) : 0;
+                      const prevY = 80 + prevDistance * 7.56;
                       const distanceBetween = prevDistance - distance;
                       
                       return (
                         <g key={station.id}>
                           {/* Линия станции */}
                           <line
-                            x1="300"
+                            x1="150"
                             y1={y}
-                            x2={300 + 144 * 37.8}
+                            x2={150 + 144 * 15.12}
                             y2={y}
                             stroke="#000000"
                             strokeWidth="2"
                           />
-                          {/* Поле для расстояния между станциями */}
+                          
+                          {/* Расстояние между станциями (слева от названия) */}
                           {i > 0 && (
                             <>
-                              <rect
-                                x="0"
-                                y={(y + 80 + prevDistance * 37.8) / 2 - 15}
-                                width="100"
-                                height="30"
-                                fill="#FFFFFF"
-                                stroke="#000000"
-                                strokeWidth="1.5"
-                              />
                               <text
-                                x="50"
-                                y={(y + 80 + prevDistance * 37.8) / 2 + 5}
+                                x="25"
+                                y={(y + prevY) / 2 + 4}
                                 textAnchor="middle"
                                 fill="#000000"
                                 fontSize="10"
@@ -809,25 +833,26 @@ const Index = () => {
                               </text>
                             </>
                           )}
+                          
                           {/* Поле для названия станции */}
                           <rect
-                            x="100"
+                            x="50"
                             y={y - 15}
-                            width="200"
+                            width="100"
                             height="30"
                             fill="#FFFFFF"
                             stroke="#000000"
                             strokeWidth="1.5"
                           />
                           <text
-                            x="200"
+                            x="100"
                             y={y + 5}
                             textAnchor="middle"
                             fill="#000000"
-                            fontSize="11"
+                            fontSize="10"
                             fontWeight="600"
                           >
-                            {station.name}
+                            {station.name.length > 12 ? station.name.substring(0, 12) + '...' : station.name}
                           </text>
                         </g>
                       );
@@ -845,15 +870,15 @@ const Index = () => {
                     
                     if (!d1 || !a1 || !d2 || !a2) return null;
                     
-                    const x1 = 300 + (t1.departure_time * 60) * (37.8 / 10);
-                    const x2 = 300 + (t1.arrival_time * 60) * (37.8 / 10);
-                    const y1 = 80 + (d1.distance_km || d1.position) * 37.8;
-                    const y2 = 80 + (a1.distance_km || a1.position) * 37.8;
+                    const x1 = 150 + (t1.departure_time * 60) * (15.12 / 10);
+                    const x2 = 150 + (t1.arrival_time * 60) * (15.12 / 10);
+                    const y1 = 80 + (d1.distance_km || d1.position) * 7.56;
+                    const y2 = 80 + (a1.distance_km || a1.position) * 7.56;
                     
-                    const x3 = 300 + (t2.departure_time * 60) * (37.8 / 10);
-                    const x4 = 300 + (t2.arrival_time * 60) * (37.8 / 10);
-                    const y3 = 80 + (d2.distance_km || d2.position) * 37.8;
-                    const y4 = 80 + (a2.distance_km || a2.position) * 37.8;
+                    const x3 = 150 + (t2.departure_time * 60) * (15.12 / 10);
+                    const x4 = 150 + (t2.arrival_time * 60) * (15.12 / 10);
+                    const y3 = 80 + (d2.distance_km || d2.position) * 7.56;
+                    const y4 = 80 + (a2.distance_km || a2.position) * 7.56;
                     
                     const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
                     const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
@@ -901,16 +926,16 @@ const Index = () => {
                     
                     if (train.departure_time >= 24 * 60 || train.arrival_time >= 24 * 60) return null;
                     
-                    // Координаты времени (37.8px = 10 минут)
-                    const x1 = 300 + (train.departure_time * 60) * (37.8 / 10);
-                    const x2 = 300 + (train.arrival_time * 60) * (37.8 / 10);
+                    // Координаты времени (15.12px = 10 минут)
+                    const x1 = 150 + (train.departure_time * 60) * (15.12 / 10);
+                    const x2 = 150 + (train.arrival_time * 60) * (15.12 / 10);
                     
-                    const maxX = 300 + 144 * 37.8;
+                    const maxX = 150 + 144 * 15.12;
                     if (x1 > maxX || x2 > maxX) return null;
                     
-                    // Координаты расстояния (37.8px = 1км)
-                    const y1 = 80 + (depStation.distance_km || depStation.position) * 37.8;
-                    const y2 = 80 + (arrStation.distance_km || arrStation.position) * 37.8;
+                    // Координаты расстояния (7.56px = 1км)
+                    const y1 = 80 + (depStation.distance_km || depStation.position) * 7.56;
+                    const y2 = 80 + (arrStation.distance_km || arrStation.position) * 7.56;
                     
                     const legendItem = getLegendItemByType(train.type);
                     const lineStyle = legendItem?.line_style || 'solid';
@@ -975,16 +1000,9 @@ const Index = () => {
                     );
                   })}
                   
-                  {/* Оси координат */}
-                  <line x1="80" y1="40" x2="80" y2="660" stroke="hsl(var(--foreground))" strokeWidth="2" />
-                  <line x1="80" y1="660" x2="2400" y2="660" stroke="hsl(var(--foreground))" strokeWidth="2" />
-                  
-                  {/* Подписи осей */}
-                  <text x="1200" y="690" textAnchor="middle" fill="hsl(var(--foreground))" fontSize="14" fontWeight="600">
+                  {/* Подпись оси времени */}
+                  <text x="1300" y="495" textAnchor="middle" fill="hsl(var(--foreground))" fontSize="14" fontWeight="600">
                     Время (часы:минуты)
-                  </text>
-                  <text x="40" y="350" textAnchor="middle" transform="rotate(-90 40 350)" fill="hsl(var(--foreground))" fontSize="14" fontWeight="600">
-                    Расстояние (км)
                   </text>
                   </svg>
                 </div>
