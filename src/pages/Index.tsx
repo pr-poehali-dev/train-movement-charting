@@ -64,10 +64,14 @@ const Index = () => {
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   useEffect(() => {
-    loadData().then(() => {
-      if (trains.length > 0) detectConflicts();
-    });
+    loadData();
   }, []);
+
+  useEffect(() => {
+    if (trains.length > 0) {
+      detectConflicts();
+    }
+  }, [trains, stations]);
 
   const loadData = async () => {
     try {
@@ -83,7 +87,8 @@ const Index = () => {
       setTrains(trainsData);
       setLegendItems(legendData);
     } catch (error) {
-      toast({ title: 'Ошибка загрузки', description: String(error), variant: 'destructive' });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast({ title: 'Ошибка загрузки', description: errorMessage, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -109,7 +114,6 @@ const Index = () => {
       }
 
       await loadData();
-      detectConflicts();
       setTrainForm({
         number: '',
         type: 'freight',
@@ -135,10 +139,10 @@ const Index = () => {
         toast({ title: 'Станция добавлена' });
       }
 
-      await loadData();
       setStationForm({ name: '', position: 0, distance_km: 0, line_id: undefined });
       setEditingStation(null);
       setStationDialogOpen(false);
+      await loadData();
     } catch (error) {
       toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
     }
@@ -388,7 +392,6 @@ const Index = () => {
       if (importedCount > 0) {
         toast({ title: `Импортировано поездов: ${importedCount}` });
         await loadData();
-        detectConflicts();
         setImportDialogOpen(false);
       } else {
         toast({ title: 'Не удалось импортировать данные', description: 'Проверьте формат файла', variant: 'destructive' });

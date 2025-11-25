@@ -224,35 +224,70 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         elif method == 'DELETE':
             item_id = event.get('queryStringParameters', {}).get('id')
             
-            if path == 'stations':
-                cur.execute('DELETE FROM stations WHERE id = %s', (item_id,))
-                conn.commit()
+            if not item_id:
                 return {
-                    'statusCode': 200,
+                    'statusCode': 400,
                     'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                    'body': json.dumps({'success': True}, default=json_serial),
+                    'body': json.dumps({'error': 'ID is required'}),
                     'isBase64Encoded': False
                 }
+            
+            if path == 'stations':
+                cur.execute('DELETE FROM stations WHERE id = %s RETURNING id', (int(item_id),))
+                deleted = cur.fetchone()
+                conn.commit()
+                if deleted:
+                    return {
+                        'statusCode': 200,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'success': True, 'id': deleted['id']}),
+                        'isBase64Encoded': False
+                    }
+                else:
+                    return {
+                        'statusCode': 404,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'error': 'Station not found'}),
+                        'isBase64Encoded': False
+                    }
             
             elif path == 'trains':
-                cur.execute('DELETE FROM trains WHERE id = %s', (item_id,))
+                cur.execute('DELETE FROM trains WHERE id = %s RETURNING id', (int(item_id),))
+                deleted = cur.fetchone()
                 conn.commit()
-                return {
-                    'statusCode': 200,
-                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                    'body': json.dumps({'success': True}, default=json_serial),
-                    'isBase64Encoded': False
-                }
+                if deleted:
+                    return {
+                        'statusCode': 200,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'success': True, 'id': deleted['id']}),
+                        'isBase64Encoded': False
+                    }
+                else:
+                    return {
+                        'statusCode': 404,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'error': 'Train not found'}),
+                        'isBase64Encoded': False
+                    }
             
             elif path == 'lines':
-                cur.execute('DELETE FROM lines WHERE id = %s', (item_id,))
+                cur.execute('DELETE FROM lines WHERE id = %s RETURNING id', (int(item_id),))
+                deleted = cur.fetchone()
                 conn.commit()
-                return {
-                    'statusCode': 200,
-                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                    'body': json.dumps({'success': True}, default=json_serial),
-                    'isBase64Encoded': False
-                }
+                if deleted:
+                    return {
+                        'statusCode': 200,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'success': True, 'id': deleted['id']}),
+                        'isBase64Encoded': False
+                    }
+                else:
+                    return {
+                        'statusCode': 404,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'error': 'Line not found'}),
+                        'isBase64Encoded': False
+                    }
         
         cur.close()
         conn.close()
