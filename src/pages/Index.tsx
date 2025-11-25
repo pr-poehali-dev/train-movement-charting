@@ -41,12 +41,13 @@ const Index = () => {
     departure_station_id: 0,
     arrival_station_id: 0,
     departure_time: 0,
-    arrival_time: 8,
+    arrival_time: 480,
   });
 
   const [stationForm, setStationForm] = useState({
     name: '',
     position: 0,
+    distance_km: 0,
     line_id: undefined as number | undefined,
   });
 
@@ -107,7 +108,7 @@ const Index = () => {
         departure_station_id: 0,
         arrival_station_id: 0,
         departure_time: 0,
-        arrival_time: 8,
+        arrival_time: 480,
       });
       setEditingTrain(null);
       setTrainDialogOpen(false);
@@ -127,7 +128,7 @@ const Index = () => {
       }
 
       await loadData();
-      setStationForm({ name: '', position: 0, line_id: undefined });
+      setStationForm({ name: '', position: 0, distance_km: 0, line_id: undefined });
       setEditingStation(null);
       setStationDialogOpen(false);
     } catch (error) {
@@ -206,6 +207,7 @@ const Index = () => {
     setStationForm({
       name: station.name,
       position: station.position,
+      distance_km: station.distance_km || 0,
       line_id: station.line_id,
     });
     setStationDialogOpen(true);
@@ -246,6 +248,12 @@ const Index = () => {
 
   const getLegendItemByType = (type: Train['type']) => {
     return legendItems.find(l => l.type === type);
+  };
+
+  const formatTime = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
 
   if (loading) {
@@ -352,24 +360,62 @@ const Index = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Время отправления (ч)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="23"
-                        value={trainForm.departure_time}
-                        onChange={(e) => setTrainForm({ ...trainForm, departure_time: parseInt(e.target.value) || 0 })}
-                      />
+                      <Label>Время отправления (ч:мм)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="23"
+                          placeholder="ЧЧ"
+                          value={Math.floor(trainForm.departure_time / 60)}
+                          onChange={(e) => {
+                            const hours = parseInt(e.target.value) || 0;
+                            const minutes = trainForm.departure_time % 60;
+                            setTrainForm({ ...trainForm, departure_time: hours * 60 + minutes });
+                          }}
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          max="59"
+                          placeholder="ММ"
+                          value={trainForm.departure_time % 60}
+                          onChange={(e) => {
+                            const hours = Math.floor(trainForm.departure_time / 60);
+                            const minutes = parseInt(e.target.value) || 0;
+                            setTrainForm({ ...trainForm, departure_time: hours * 60 + minutes });
+                          }}
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Время прибытия (ч)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="23"
-                        value={trainForm.arrival_time}
-                        onChange={(e) => setTrainForm({ ...trainForm, arrival_time: parseInt(e.target.value) || 0 })}
-                      />
+                      <Label>Время прибытия (ч:мм)</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          max="23"
+                          placeholder="ЧЧ"
+                          value={Math.floor(trainForm.arrival_time / 60)}
+                          onChange={(e) => {
+                            const hours = parseInt(e.target.value) || 0;
+                            const minutes = trainForm.arrival_time % 60;
+                            setTrainForm({ ...trainForm, arrival_time: hours * 60 + minutes });
+                          }}
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          max="59"
+                          placeholder="ММ"
+                          value={trainForm.arrival_time % 60}
+                          onChange={(e) => {
+                            const hours = Math.floor(trainForm.arrival_time / 60);
+                            const minutes = parseInt(e.target.value) || 0;
+                            setTrainForm({ ...trainForm, arrival_time: hours * 60 + minutes });
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                   <Button onClick={saveTrain} className="w-full">
@@ -420,79 +466,121 @@ const Index = () => {
                 </Button>
               </div>
               
-              <div className="relative overflow-auto" style={{ height: '600px' }}>
+              <div className="relative overflow-auto" style={{ height: '700px' }}>
                 <svg 
                   ref={svgRef}
-                  width={`${100 * zoom}%`} 
-                  height="600" 
+                  width={2400 * zoom}
+                  height={700}
                   className="border border-border rounded-lg bg-card"
                 >
                   <defs>
-                    <pattern id="grid" width="60" height="150" patternUnits="userSpaceOnUse">
-                      <path d="M 60 0 L 0 0 0 150" fill="none" stroke="hsl(var(--muted))" strokeWidth="0.5" />
+                    <pattern id="grid-10min" width="16" height="2" patternUnits="userSpaceOnUse">
+                      <path d="M 0 0 L 0 2" fill="none" stroke="hsl(var(--muted))" strokeWidth="0.3" />
+                    </pattern>
+                    <pattern id="grid-30min" width="48" height="2" patternUnits="userSpaceOnUse">
+                      <path d="M 0 0 L 0 2" fill="none" stroke="hsl(var(--muted))" strokeWidth="0.5" strokeDasharray="3,3" />
                     </pattern>
                   </defs>
-                  <rect width="100%" height="100%" fill="url(#grid)" />
                   
-                  {hours.map((hour, i) => (
-                    <g key={hour}>
-                      <line
-                        x1={60 + i * 60}
-                        y1="0"
-                        x2={60 + i * 60}
-                        y2="600"
-                        stroke="hsl(var(--border))"
-                        strokeWidth="1"
-                      />
-                      <text
-                        x={60 + i * 60}
-                        y="20"
-                        textAnchor="middle"
-                        fill="hsl(var(--foreground))"
-                        fontSize="12"
-                        fontWeight="bold"
-                      >
-                        {hour}
-                      </text>
-                    </g>
-                  ))}
-
-                  {stations.map((station, i) => (
-                    <g key={station.id}>
-                      <line
-                        x1="0"
-                        y1={100 + i * 150}
-                        x2="100%"
-                        y2={100 + i * 150}
-                        stroke={station.line_color || 'hsl(var(--border))'}
-                        strokeWidth="2"
-                      />
-                      <text
-                        x="10"
-                        y={95 + i * 150}
-                        fill="hsl(var(--foreground))"
-                        fontSize="14"
-                        fontWeight="600"
-                      >
-                        {station.name}
-                        {isMetroMode && station.line_name && (
-                          <tspan fill={station.line_color} fontSize="12"> ({station.line_name})</tspan>
+                  <rect width="100%" height="100%" fill="hsl(var(--card))" />
+                  
+                  {/* Сетка времени: вертикальные линии каждые 10 минут (4мм = 10мин, в пикселях ~16px) */}
+                  {Array.from({ length: 145 }, (_, i) => {
+                    const x = 80 + i * 16;
+                    const hour = Math.floor(i / 6);
+                    const minute = (i % 6) * 10;
+                    const isHourMark = minute === 0;
+                    const isHalfHourMark = minute === 30;
+                    
+                    return (
+                      <g key={`time-${i}`}>
+                        <line
+                          x1={x}
+                          y1="40"
+                          x2={x}
+                          y2="660"
+                          stroke={isHourMark ? 'hsl(var(--border))' : 'hsl(var(--muted))'}
+                          strokeWidth={isHourMark ? '1.5' : '0.5'}
+                          strokeDasharray={isHalfHourMark ? '4,4' : '0'}
+                        />
+                        {isHourMark && (
+                          <text
+                            x={x}
+                            y="30"
+                            textAnchor="middle"
+                            fill="hsl(var(--foreground))"
+                            fontSize="12"
+                            fontWeight="bold"
+                          >
+                            {hour}:00
+                          </text>
                         )}
-                      </text>
-                    </g>
-                  ))}
-
+                      </g>
+                    );
+                  })}
+                  
+                  {/* Горизонтальные линии станций (2мм = 1км, расстояние = position * 2мм в пикселях ~8px) */}
+                  {stations
+                    .sort((a, b) => b.position - a.position)
+                    .map((station, i) => {
+                      const y = 80 + station.position * 8;
+                      
+                      return (
+                        <g key={station.id}>
+                          <line
+                            x1="80"
+                            y1={y}
+                            x2="2400"
+                            y2={y}
+                            stroke={station.line_color || 'hsl(var(--border))'}
+                            strokeWidth="1.5"
+                          />
+                          <text
+                            x="10"
+                            y={y + 4}
+                            fill="hsl(var(--foreground))"
+                            fontSize="12"
+                            fontWeight="600"
+                          >
+                            {station.name}
+                            {isMetroMode && station.line_name && (
+                              <tspan fill={station.line_color} fontSize="10"> ({station.line_name})</tspan>
+                            )}
+                          </text>
+                          <text
+                            x="60"
+                            y={y + 4}
+                            textAnchor="end"
+                            fill="hsl(var(--muted-foreground))"
+                            fontSize="10"
+                          >
+                            {station.position}км
+                          </text>
+                        </g>
+                      );
+                    })}
+                  
+                  {/* Линии движения поездов */}
                   {trains.map(train => {
                     const depStation = stations.find(s => s.id === train.departure_station_id);
                     const arrStation = stations.find(s => s.id === train.arrival_station_id);
                     if (!depStation || !arrStation) return null;
-
-                    const x1 = 60 + train.departure_time * 60;
-                    const y1 = 100 + depStation.position * 150;
-                    const x2 = 60 + train.arrival_time * 60;
-                    const y2 = 100 + arrStation.position * 150;
+                    
+                    // Координаты времени (16px = 10 минут)
+                    const x1 = 80 + (train.departure_time * 60) * (16 / 10);
+                    const x2 = 80 + (train.arrival_time * 60) * (16 / 10);
+                    
+                    // Координаты расстояния (8px = 1км)
+                    const y1 = 80 + depStation.position * 8;
+                    const y2 = 80 + arrStation.position * 8;
+                    
                     const legendItem = getLegendItemByType(train.type);
-
+                    const lineStyle = legendItem?.line_style || 'solid';
+                    const strokeDasharray = lineStyle === 'dashed' ? '6,4' : lineStyle === 'dotted' ? '2,3' : '0';
+                    
+                    // Направление: нечетные (freight) - сверху вниз, четные (passenger/service) - снизу вверх
+                    const isOdd = train.type === 'freight';
+                    
                     return (
                       <g key={train.id}>
                         <line
@@ -501,25 +589,65 @@ const Index = () => {
                           x2={x2}
                           y2={y2}
                           stroke={train.color}
-                          strokeWidth="3"
-                          strokeDasharray={legendItem?.dashed ? '5,5' : '0'}
-                          className="transition-all duration-300 hover:stroke-width-5 cursor-pointer"
+                          strokeWidth="2.5"
+                          strokeDasharray={strokeDasharray}
+                          className="transition-all duration-300 cursor-pointer"
                         />
-                        <circle cx={x1} cy={y1} r="5" fill={train.color} />
-                        <circle cx={x2} cy={y2} r="5" fill={train.color} />
+                        
+                        {/* Метки времени на точках отправления и прибытия */}
+                        <circle cx={x1} cy={y1} r="4" fill={train.color} />
+                        <text
+                          x={x1}
+                          y={y1 - 8}
+                          textAnchor="middle"
+                          fill="hsl(var(--foreground))"
+                          fontSize="11"
+                          fontWeight="bold"
+                        >
+                          {formatTime(train.departure_time)}
+                        </text>
+                        
+                        <circle cx={x2} cy={y2} r="4" fill={train.color} />
+                        <text
+                          x={x2}
+                          y={y2 - 8}
+                          textAnchor="middle"
+                          fill="hsl(var(--foreground))"
+                          fontSize="11"
+                          fontWeight="bold"
+                        >
+                          {formatTime(train.arrival_time)}
+                        </text>
+                        
+                        {/* Номер поезда */}
                         <text
                           x={(x1 + x2) / 2}
                           y={(y1 + y2) / 2 - 10}
-                          fill={train.color}
-                          fontSize="13"
-                          fontWeight="bold"
                           textAnchor="middle"
+                          fill={train.color}
+                          fontSize="14"
+                          fontWeight="bold"
+                          stroke="hsl(var(--card))"
+                          strokeWidth="3"
+                          paintOrder="stroke"
                         >
                           {train.number}
                         </text>
                       </g>
                     );
                   })}
+                  
+                  {/* Оси координат */}
+                  <line x1="80" y1="40" x2="80" y2="660" stroke="hsl(var(--foreground))" strokeWidth="2" />
+                  <line x1="80" y1="660" x2="2400" y2="660" stroke="hsl(var(--foreground))" strokeWidth="2" />
+                  
+                  {/* Подписи осей */}
+                  <text x="1200" y="690" textAnchor="middle" fill="hsl(var(--foreground))" fontSize="14" fontWeight="600">
+                    Время (часы:минуты)
+                  </text>
+                  <text x="40" y="350" textAnchor="middle" transform="rotate(-90 40 350)" fill="hsl(var(--foreground))" fontSize="14" fontWeight="600">
+                    Расстояние (км)
+                  </text>
                 </svg>
               </div>
             </Card>
@@ -552,7 +680,7 @@ const Index = () => {
                             {depStation?.name} → {arrStation?.name}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {train.departure_time}:00 - {train.arrival_time}:00
+                            {formatTime(train.departure_time)} - {formatTime(train.arrival_time)}
                           </div>
                         </div>
                         <div className="flex gap-2">
@@ -599,6 +727,16 @@ const Index = () => {
                         min="0"
                         value={stationForm.position}
                         onChange={(e) => setStationForm({ ...stationForm, position: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Расстояние (км)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={stationForm.distance_km}
+                        onChange={(e) => setStationForm({ ...stationForm, distance_km: parseFloat(e.target.value) || 0 })}
                       />
                     </div>
                     <div className="space-y-2">

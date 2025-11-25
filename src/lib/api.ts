@@ -11,6 +11,7 @@ export interface Station {
   id: number;
   name: string;
   position: number;
+  distance_km: number;
   line_id?: number;
   line_name?: string;
   line_color?: string;

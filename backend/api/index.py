@@ -7,12 +7,15 @@ import json
 import os
 from typing import Dict, Any
 from datetime import datetime
+from decimal import Decimal
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 def json_serial(obj):
     if isinstance(obj, datetime):
         return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
     raise TypeError(f'Type {type(obj)} not serializable')
 
 def get_db_connection():
@@ -54,7 +57,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             elif path == 'stations':
                 cur.execute('''
-                    SELECT s.*, l.name as line_name, l.color as line_color 
+                    SELECT s.id, s.name, s.position, s.distance_km, s.line_id, s.created_at,
+                           l.name as line_name, l.color as line_color 
                     FROM stations s 
                     LEFT JOIN lines l ON s.line_id = l.id 
                     ORDER BY s.position
@@ -108,10 +112,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             elif path == 'stations':
                 name = body_data.get('name')
                 position = body_data.get('position', 0)
+                distance_km = body_data.get('distance_km', 0)
                 line_id = body_data.get('line_id')
                 cur.execute(
-                    'INSERT INTO stations (name, position, line_id) VALUES (%s, %s, %s) RETURNING *',
-                    (name, position, line_id)
+                    'INSERT INTO stations (name, position, distance_km, line_id) VALUES (%s, %s, %s, %s) RETURNING *',
+                    (name, position, distance_km, line_id)
                 )
                 conn.commit()
                 station = cur.fetchone()
@@ -168,8 +173,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             elif path == 'stations':
                 cur.execute(
-                    'UPDATE stations SET name = %s, position = %s, line_id = %s WHERE id = %s RETURNING *',
-                    (body_data.get('name'), body_data.get('position'), body_data.get('line_id'), item_id)
+                    'UPDATE stations SET name = %s, position = %s, distance_km = %s, line_id = %s WHERE id = %s RETURNING *',
+                    (body_data.get('name'), body_data.get('position'), body_data.get('distance_km'), body_data.get('line_id'), item_id)
                 )
                 conn.commit()
                 station = cur.fetchone()
