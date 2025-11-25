@@ -347,6 +347,13 @@ const Index = () => {
     
     if (!d1 || !a1 || !d2 || !a2) return false;
     
+    // Определяем направление движения (четные - север/восток, нечетные - юг/запад)
+    const t1IsEven = parseInt(t1.number) % 2 === 0;
+    const t2IsEven = parseInt(t2.number) % 2 === 0;
+    
+    // Если поезда движутся в разных направлениях (разные пути), конфликта нет
+    if (t1IsEven !== t2IsEven) return false;
+    
     const x1 = t1.departure_time;
     const x2 = t1.arrival_time;
     const y1 = d1.distance_km;
