@@ -744,6 +744,7 @@ const Index = () => {
                           y2="680"
                           stroke="#000000"
                           strokeWidth={isHourMark ? '2' : '1'}
+                          strokeDasharray={isHalfHourMark ? '5,5' : '0'}
                         />
                         {isHourMark && (
                           <text
@@ -772,14 +773,14 @@ const Index = () => {
                           <rect
                             x="0"
                             y={y - 15}
-                            width="140"
+                            width="145"
                             height="30"
                             fill="#FFFFFF"
                             stroke="#000000"
                             strokeWidth="1.5"
                           />
                           <line
-                            x1="140"
+                            x1="145"
                             y1={y}
                             x2="5670"
                             y2={y}
@@ -787,14 +788,14 @@ const Index = () => {
                             strokeWidth="2"
                           />
                           <text
-                            x="70"
+                            x="5"
                             y={y + 5}
-                            textAnchor="middle"
+                            textAnchor="start"
                             fill="#000000"
-                            fontSize="12"
+                            fontSize="11"
                             fontWeight="600"
                           >
-                            {station.name}
+                            {station.name.length > 18 ? station.name.substring(0, 18) + '...' : station.name}
                           </text>
                         </g>
                       );
