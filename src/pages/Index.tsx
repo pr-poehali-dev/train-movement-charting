@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,8 @@ const Index = () => {
   const [zoom, setZoom] = useState(1);
   const [loading, setLoading] = useState(true);
   const [conflicts, setConflicts] = useState<Array<{train1: Train, train2: Train}>>([]);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -324,6 +327,96 @@ const Index = () => {
     }
   };
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      let importedCount = 0;
+
+      for (const row of jsonData as any[]) {
+        if (!row['Номер'] || !row['Отправление'] || !row['Прибытие']) continue;
+
+        const depStationName = String(row['Станция отправления'] || '').trim();
+        const arrStationName = String(row['Станция прибытия'] || '').trim();
+
+        const depStation = stations.find(s => s.name === depStationName);
+        const arrStation = stations.find(s => s.name === arrStationName);
+
+        if (!depStation || !arrStation) continue;
+
+        const parseTime = (timeStr: string): number => {
+          const parts = String(timeStr).split(':');
+          const hours = parseInt(parts[0]) || 0;
+          const minutes = parseInt(parts[1]) || 0;
+          return hours * 60 + minutes;
+        };
+
+        const trainData = {
+          schedule_id: 1,
+          number: String(row['Номер']),
+          type: (row['Тип'] === 'Пассажирский' ? 'passenger' : row['Тип'] === 'Служебный' ? 'service' : 'freight') as Train['type'],
+          departure_station_id: depStation.id,
+          arrival_station_id: arrStation.id,
+          departure_time: parseTime(row['Отправление']),
+          arrival_time: parseTime(row['Прибытие']),
+          color: row['Цвет'] || '#0EA5E9',
+        };
+
+        await api.trains.create(trainData);
+        importedCount++;
+      }
+
+      if (importedCount > 0) {
+        toast({ title: `Импортировано поездов: ${importedCount}` });
+        await loadData();
+        detectConflicts();
+        setImportDialogOpen(false);
+      } else {
+        toast({ title: 'Не удалось импортировать данные', description: 'Проверьте формат файла', variant: 'destructive' });
+      }
+    } catch (error) {
+      toast({ title: 'Ошибка импорта', description: String(error), variant: 'destructive' });
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const exportTemplate = () => {
+    const template = [
+      {
+        'Номер': '101',
+        'Тип': 'Пассажирский',
+        'Станция отправления': stations[0]?.name || 'Станция А',
+        'Станция прибытия': stations[1]?.name || 'Станция Б',
+        'Отправление': '08:00',
+        'Прибытие': '10:30',
+        'Цвет': '#0EA5E9'
+      },
+      {
+        'Номер': '202',
+        'Тип': 'Грузовой',
+        'Станция отправления': stations[0]?.name || 'Станция А',
+        'Станция прибытия': stations[2]?.name || 'Станция В',
+        'Отправление': '14:00',
+        'Прибытие': '18:00',
+        'Цвет': '#F97316'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Поезда');
+    XLSX.writeFile(wb, 'template_trains.xlsx');
+    toast({ title: 'Шаблон скачан', description: 'Заполните файл и импортируйте обратно' });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -360,8 +453,56 @@ const Index = () => {
             
             <Button variant="outline" onClick={exportToPDF} className="gap-1 md:gap-2 h-8 md:h-10 px-2 md:px-4">
               <Icon name="Download" size={16} className="md:w-5 md:h-5" />
-              <span className="hidden sm:inline">Экспорт</span>
+              <span className="hidden sm:inline">Экспорт PNG</span>
             </Button>
+            
+            <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-1 md:gap-2 h-8 md:h-10 px-2 md:px-4">
+                  <Icon name="Upload" size={16} className="md:w-5 md:h-5" />
+                  <span className="hidden sm:inline">Импорт</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Импорт расписания</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <p className="text-sm text-muted-foreground">
+                    Загрузите Excel (.xlsx) или CSV файл с расписанием поездов.
+                  </p>
+                  <div className="space-y-2">
+                    <Label>Формат файла:</Label>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div>• Номер - номер поезда</div>
+                      <div>• Тип - Пассажирский/Грузовой/Служебный</div>
+                      <div>• Станция отправления - название станции</div>
+                      <div>• Станция прибытия - название станции</div>
+                      <div>• Отправление - время в формате ЧЧ:ММ</div>
+                      <div>• Прибытие - время в формате ЧЧ:ММ</div>
+                      <div>• Цвет (опционально) - HEX цвет</div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={exportTemplate} variant="outline" className="flex-1 gap-2">
+                      <Icon name="FileDown" size={16} />
+                      Скачать шаблон
+                    </Button>
+                    <Button onClick={() => fileInputRef.current?.click()} className="flex-1 gap-2">
+                      <Icon name="Upload" size={16} />
+                      Выбрать файл
+                    </Button>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleImportFile}
+                    className="hidden"
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
             
             <Dialog open={trainDialogOpen} onOpenChange={setTrainDialogOpen}>
               <DialogTrigger asChild>
@@ -560,14 +701,18 @@ const Index = () => {
                 className="relative overflow-auto" 
                 style={{ height: '500px', width: '100%' }}
               >
-                <svg 
-                  ref={svgRef}
-                  width={2400 * zoom}
-                  height={700 * zoom}
-                  viewBox={`0 0 2400 700`}
-                  preserveAspectRatio="xMinYMin meet"
-                  className="border border-border rounded-lg bg-card"
-                >
+                <div style={{ 
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'top left',
+                  width: '2400px',
+                  height: '700px'
+                }}>
+                  <svg 
+                    ref={svgRef}
+                    width="2400"
+                    height="700"
+                    className="border border-border rounded-lg bg-card"
+                  >
                   <defs>
                     <pattern id="grid-10min" width="16" height="2" patternUnits="userSpaceOnUse">
                       <path d="M 0 0 L 0 2" fill="none" stroke="hsl(var(--muted))" strokeWidth="0.3" />
@@ -803,7 +948,8 @@ const Index = () => {
                   <text x="40" y="350" textAnchor="middle" transform="rotate(-90 40 350)" fill="hsl(var(--foreground))" fontSize="14" fontWeight="600">
                     Расстояние (км)
                   </text>
-                </svg>
+                  </svg>
+                </div>
               </div>
             </Card>
           </TabsContent>
