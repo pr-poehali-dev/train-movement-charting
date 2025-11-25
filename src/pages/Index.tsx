@@ -243,7 +243,7 @@ const Index = () => {
     const img = new Image();
     
     const pxPerMm = 3.7795275591;
-    const svgWidth = parseFloat(svgClone.getAttribute('width') || '5670');
+    const svgWidth = parseFloat(svgClone.getAttribute('width') || '5820');
     const svgHeight = parseFloat(svgClone.getAttribute('height') || '700');
     
     canvas.width = svgWidth;
@@ -716,12 +716,12 @@ const Index = () => {
                 <div style={{ 
                   transform: `scale(${zoom})`,
                   transformOrigin: 'top left',
-                  width: '5670px',
+                  width: '5820px',
                   height: '700px'
                 }}>
                   <svg 
                     ref={svgRef}
-                    width="5670"
+                    width="5820"
                     height="700"
                     className="border border-border rounded-lg bg-card"
                   >
@@ -730,7 +730,7 @@ const Index = () => {
                   {/* Сетка времени (10мм = 10 минут, 24 часа = 144 интервала по 10 мин) */}
                   {Array.from({ length: 145 }, (_, i) => {
                     if (i > 144) return null;
-                    const x = 150 + i * 37.8;
+                    const x = 300 + i * 37.8;
                     const hour = Math.floor(i / 6);
                     const minute = (i % 6) * 10;
                     const isHourMark = minute === 0;
@@ -771,28 +771,49 @@ const Index = () => {
                       
                       return (
                         <g key={station.id}>
+                          {/* Линия станции */}
                           <line
-                            x1="0"
+                            x1="300"
                             y1={y}
-                            x2={150 + 144 * 37.8}
+                            x2={300 + 144 * 37.8}
                             y2={y}
                             stroke="#000000"
                             strokeWidth="2"
                           />
+                          {/* Поле для расстояния */}
                           <rect
                             x="0"
-                            y="50"
-                            width="150"
-                            height={y - 50}
+                            y={y - 15}
+                            width="100"
+                            height="30"
                             fill="#FFFFFF"
                             stroke="#000000"
                             strokeWidth="1.5"
                           />
                           <text
-                            x="75"
-                            y={(y + 50) / 2}
+                            x="50"
+                            y={y + 5}
                             textAnchor="middle"
-                            dominantBaseline="middle"
+                            fill="#000000"
+                            fontSize="10"
+                            fontWeight="600"
+                          >
+                            {station.position}км
+                          </text>
+                          {/* Поле для названия станции */}
+                          <rect
+                            x="100"
+                            y={y - 15}
+                            width="200"
+                            height="30"
+                            fill="#FFFFFF"
+                            stroke="#000000"
+                            strokeWidth="1.5"
+                          />
+                          <text
+                            x="200"
+                            y={y + 5}
+                            textAnchor="middle"
                             fill="#000000"
                             fontSize="11"
                             fontWeight="600"
@@ -815,13 +836,13 @@ const Index = () => {
                     
                     if (!d1 || !a1 || !d2 || !a2) return null;
                     
-                    const x1 = 150 + (t1.departure_time * 60) * (37.8 / 10);
-                    const x2 = 150 + (t1.arrival_time * 60) * (37.8 / 10);
+                    const x1 = 300 + (t1.departure_time * 60) * (37.8 / 10);
+                    const x2 = 300 + (t1.arrival_time * 60) * (37.8 / 10);
                     const y1 = 80 + d1.position * 37.8;
                     const y2 = 80 + a1.position * 37.8;
                     
-                    const x3 = 150 + (t2.departure_time * 60) * (37.8 / 10);
-                    const x4 = 150 + (t2.arrival_time * 60) * (37.8 / 10);
+                    const x3 = 300 + (t2.departure_time * 60) * (37.8 / 10);
+                    const x4 = 300 + (t2.arrival_time * 60) * (37.8 / 10);
                     const y3 = 80 + d2.position * 37.8;
                     const y4 = 80 + a2.position * 37.8;
                     
@@ -872,10 +893,10 @@ const Index = () => {
                     if (train.departure_time >= 24 * 60 || train.arrival_time >= 24 * 60) return null;
                     
                     // Координаты времени (37.8px = 10 минут)
-                    const x1 = 150 + (train.departure_time * 60) * (37.8 / 10);
-                    const x2 = 150 + (train.arrival_time * 60) * (37.8 / 10);
+                    const x1 = 300 + (train.departure_time * 60) * (37.8 / 10);
+                    const x2 = 300 + (train.arrival_time * 60) * (37.8 / 10);
                     
-                    const maxX = 150 + 144 * 37.8;
+                    const maxX = 300 + 144 * 37.8;
                     if (x1 > maxX || x2 > maxX) return null;
                     
                     // Координаты расстояния (37.8px = 1км)
