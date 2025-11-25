@@ -704,21 +704,21 @@ const Index = () => {
                 <div style={{ 
                   transform: `scale(${zoom})`,
                   transformOrigin: 'top left',
-                  width: '2400px',
-                  height: '700px'
+                  width: '24000px',
+                  height: '7000px'
                 }}>
                   <svg 
                     ref={svgRef}
-                    width="2400"
-                    height="700"
+                    width="24000"
+                    height="7000"
                     className="border border-border rounded-lg bg-card"
                   >
                   <defs>
-                    <pattern id="grid-10min" width="16" height="2" patternUnits="userSpaceOnUse">
-                      <path d="M 0 0 L 0 2" fill="none" stroke="hsl(var(--muted))" strokeWidth="0.3" />
+                    <pattern id="grid-10min" width="160" height="20" patternUnits="userSpaceOnUse">
+                      <path d="M 0 0 L 0 20" fill="none" stroke="hsl(var(--muted))" strokeWidth="3" />
                     </pattern>
-                    <pattern id="grid-30min" width="48" height="2" patternUnits="userSpaceOnUse">
-                      <path d="M 0 0 L 0 2" fill="none" stroke="hsl(var(--muted))" strokeWidth="0.5" strokeDasharray="3,3" />
+                    <pattern id="grid-30min" width="480" height="20" patternUnits="userSpaceOnUse">
+                      <path d="M 0 0 L 0 20" fill="none" stroke="hsl(var(--muted))" strokeWidth="5" strokeDasharray="30,30" />
                     </pattern>
                   </defs>
                   
@@ -726,7 +726,7 @@ const Index = () => {
                   
                   {/* Сетка времени */}
                   {Array.from({ length: 145 }, (_, i) => {
-                    const x = 80 + i * 16;
+                    const x = 800 + i * 160;
                     const hour = Math.floor(i / 6);
                     const minute = (i % 6) * 10;
                     const isHourMark = minute === 0;
@@ -736,20 +736,20 @@ const Index = () => {
                       <g key={`time-${i}`}>
                         <line
                           x1={x}
-                          y1="40"
+                          y1="400"
                           x2={x}
-                          y2="660"
+                          y2="6600"
                           stroke={isHourMark ? 'hsl(var(--border))' : 'hsl(var(--muted))'}
-                          strokeWidth={isHourMark ? '1.5' : '0.5'}
-                          strokeDasharray={isHalfHourMark ? '4,4' : '0'}
+                          strokeWidth={isHourMark ? '15' : '5'}
+                          strokeDasharray={isHalfHourMark ? '40,40' : '0'}
                         />
                         {isHourMark && (
                           <text
                             x={x}
-                            y="30"
+                            y="300"
                             textAnchor="middle"
                             fill="hsl(var(--foreground))"
-                            fontSize="12"
+                            fontSize="120"
                             fontWeight="bold"
                           >
                             {hour}:00
@@ -759,40 +759,40 @@ const Index = () => {
                     );
                   })}
                   
-                  {/* Горизонтальные линии станций (2мм = 1км, расстояние = position * 2мм в пикселях ~8px) */}
+                  {/* Горизонтальные линии станций (2мм = 1км, расстояние = position * 2мм в пикселях ~80px) */}
                   {stations
                     .sort((a, b) => b.position - a.position)
                     .map((station, i) => {
-                      const y = 80 + station.position * 8;
+                      const y = 800 + station.position * 80;
                       
                       return (
                         <g key={station.id}>
                           <line
-                            x1="80"
+                            x1="800"
                             y1={y}
-                            x2="2400"
+                            x2="24000"
                             y2={y}
                             stroke={station.line_color || 'hsl(var(--border))'}
-                            strokeWidth="1.5"
+                            strokeWidth="15"
                           />
                           <text
-                            x="10"
-                            y={y + 4}
+                            x="100"
+                            y={y + 40}
                             fill="hsl(var(--foreground))"
-                            fontSize="12"
+                            fontSize="120"
                             fontWeight="600"
                           >
                             {station.name}
                             {isMetroMode && station.line_name && (
-                              <tspan fill={station.line_color} fontSize="10"> ({station.line_name})</tspan>
+                              <tspan fill={station.line_color} fontSize="100"> ({station.line_name})</tspan>
                             )}
                           </text>
                           <text
-                            x="60"
-                            y={y + 4}
+                            x="600"
+                            y={y + 40}
                             textAnchor="end"
                             fill="hsl(var(--muted-foreground))"
-                            fontSize="10"
+                            fontSize="100"
                           >
                             {station.position}км
                           </text>
@@ -812,15 +812,15 @@ const Index = () => {
                     
                     if (!d1 || !a1 || !d2 || !a2) return null;
                     
-                    const x1 = 80 + (t1.departure_time * 60) * (16 / 10);
-                    const x2 = 80 + (t1.arrival_time * 60) * (16 / 10);
-                    const y1 = 80 + d1.position * 8;
-                    const y2 = 80 + a1.position * 8;
+                    const x1 = 800 + (t1.departure_time * 60) * (160 / 10);
+                    const x2 = 800 + (t1.arrival_time * 60) * (160 / 10);
+                    const y1 = 800 + d1.position * 80;
+                    const y2 = 800 + a1.position * 80;
                     
-                    const x3 = 80 + (t2.departure_time * 60) * (16 / 10);
-                    const x4 = 80 + (t2.arrival_time * 60) * (16 / 10);
-                    const y3 = 80 + d2.position * 8;
-                    const y4 = 80 + a2.position * 8;
+                    const x3 = 800 + (t2.departure_time * 60) * (160 / 10);
+                    const x4 = 800 + (t2.arrival_time * 60) * (160 / 10);
+                    const y3 = 800 + d2.position * 80;
+                    const y4 = 800 + a2.position * 80;
                     
                     const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
                     const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
@@ -833,7 +833,7 @@ const Index = () => {
                         <circle 
                           cx={intersectX} 
                           cy={intersectY} 
-                          r="12" 
+                          r="120" 
                           fill="red" 
                           opacity="0.3"
                           className="animate-pulse"
@@ -841,17 +841,17 @@ const Index = () => {
                         <circle 
                           cx={intersectX} 
                           cy={intersectY} 
-                          r="8" 
+                          r="80" 
                           fill="none" 
                           stroke="red" 
-                          strokeWidth="2"
+                          strokeWidth="20"
                         />
                         <text
                           x={intersectX}
-                          y={intersectY + 25}
+                          y={intersectY + 250}
                           textAnchor="middle"
                           fill="red"
-                          fontSize="11"
+                          fontSize="110"
                           fontWeight="bold"
                         >
                           ⚠️ Конфликт
@@ -866,17 +866,17 @@ const Index = () => {
                     const arrStation = stations.find(s => s.id === train.arrival_station_id);
                     if (!depStation || !arrStation) return null;
                     
-                    // Координаты времени (16px = 10 минут)
-                    const x1 = 80 + (train.departure_time * 60) * (16 / 10);
-                    const x2 = 80 + (train.arrival_time * 60) * (16 / 10);
+                    // Координаты времени (160px = 10 минут)
+                    const x1 = 800 + (train.departure_time * 60) * (160 / 10);
+                    const x2 = 800 + (train.arrival_time * 60) * (160 / 10);
                     
-                    // Координаты расстояния (8px = 1км)
-                    const y1 = 80 + depStation.position * 8;
-                    const y2 = 80 + arrStation.position * 8;
+                    // Координаты расстояния (80px = 1км)
+                    const y1 = 800 + depStation.position * 80;
+                    const y2 = 800 + arrStation.position * 80;
                     
                     const legendItem = getLegendItemByType(train.type);
                     const lineStyle = legendItem?.line_style || 'solid';
-                    const strokeDasharray = lineStyle === 'dashed' ? '6,4' : lineStyle === 'dotted' ? '2,3' : '0';
+                    const strokeDasharray = lineStyle === 'dashed' ? '60,40' : lineStyle === 'dotted' ? '20,30' : '0';
                     
                     // Направление: нечетные (freight) - сверху вниз, четные (passenger/service) - снизу вверх
                     const isOdd = train.type === 'freight';
@@ -889,31 +889,31 @@ const Index = () => {
                           x2={x2}
                           y2={y2}
                           stroke={train.color}
-                          strokeWidth="2.5"
+                          strokeWidth="25"
                           strokeDasharray={strokeDasharray}
                           className="transition-all duration-300 cursor-pointer"
                         />
                         
                         {/* Метки времени на точках отправления и прибытия */}
-                        <circle cx={x1} cy={y1} r="4" fill={train.color} />
+                        <circle cx={x1} cy={y1} r="40" fill={train.color} />
                         <text
                           x={x1}
-                          y={y1 - 8}
+                          y={y1 - 80}
                           textAnchor="middle"
                           fill="hsl(var(--foreground))"
-                          fontSize="11"
+                          fontSize="110"
                           fontWeight="bold"
                         >
                           {formatTime(train.departure_time)}
                         </text>
                         
-                        <circle cx={x2} cy={y2} r="4" fill={train.color} />
+                        <circle cx={x2} cy={y2} r="40" fill={train.color} />
                         <text
                           x={x2}
-                          y={y2 - 8}
+                          y={y2 - 80}
                           textAnchor="middle"
                           fill="hsl(var(--foreground))"
-                          fontSize="11"
+                          fontSize="110"
                           fontWeight="bold"
                         >
                           {formatTime(train.arrival_time)}
@@ -922,13 +922,13 @@ const Index = () => {
                         {/* Номер поезда */}
                         <text
                           x={(x1 + x2) / 2}
-                          y={(y1 + y2) / 2 - 10}
+                          y={(y1 + y2) / 2 - 100}
                           textAnchor="middle"
                           fill={train.color}
-                          fontSize="14"
+                          fontSize="140"
                           fontWeight="bold"
                           stroke="hsl(var(--card))"
-                          strokeWidth="3"
+                          strokeWidth="30"
                           paintOrder="stroke"
                         >
                           {train.number}
