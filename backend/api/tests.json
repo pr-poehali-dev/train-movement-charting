@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Get stations",
+      "method": "GET",
+      "path": "/?path=stations",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "0": {
+          "id": "number",
+          "name": "string"
+        }
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get lines",
+      "method": "GET",
+      "path": "/?path=lines",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "0": {
+          "id": "number",
+          "name": "string"
+        }
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

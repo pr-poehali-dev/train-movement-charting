@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,104 +10,182 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from '@/components/ui/use-toast';
 import { Switch } from '@/components/ui/switch';
 import Icon from '@/components/ui/icon';
-
-interface Train {
-  id: string;
-  number: string;
-  type: 'freight' | 'passenger' | 'service';
-  departureStation: string;
-  arrivalStation: string;
-  departureTime: number;
-  arrivalTime: number;
-  color: string;
-}
-
-interface Station {
-  id: string;
-  name: string;
-  position: number;
-  line?: string;
-}
-
-interface LegendItem {
-  id: string;
-  type: Train['type'];
-  label: string;
-  color: string;
-  dashed: boolean;
-}
+import { api, Line, Station, Train, LegendItem } from '@/lib/api';
 
 const Index = () => {
   const [isMetroMode, setIsMetroMode] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [panX, setPanX] = useState(0);
+  const [loading, setLoading] = useState(true);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const [stations, setStations] = useState<Station[]>([
-    { id: '1', name: 'Ст. Первомайская', position: 0, line: 'Красная' },
-    { id: '2', name: 'Раз. Никольское', position: 1, line: 'Красная' },
-    { id: '3', name: 'Раз. Филимоновский', position: 2, line: 'Синяя' },
-    { id: '4', name: 'Обменный разъезд', position: 3, line: 'Синяя' },
-  ]);
-
-  const [trains, setTrains] = useState<Train[]>([
-    { id: '1', number: '№1', type: 'freight', departureStation: '1', arrivalStation: '3', departureTime: 0, arrivalTime: 8, color: '#0EA5E9' },
-    { id: '2', number: '№2', type: 'freight', departureStation: '3', arrivalStation: '1', departureTime: 2, arrivalTime: 10, color: '#F97316' },
-    { id: '3', number: '№3', type: 'passenger', departureStation: '1', arrivalStation: '4', departureTime: 4, arrivalTime: 14, color: '#8B5CF6' },
-    { id: '4', number: '№4', type: 'service', departureStation: '2', arrivalStation: '4', departureTime: 6, arrivalTime: 12, color: '#10B981' },
-  ]);
-
-  const [legendItems, setLegendItems] = useState<LegendItem[]>([
-    { id: '1', type: 'freight', label: 'Торговозные поезда', color: '#0EA5E9', dashed: false },
-    { id: '2', type: 'passenger', label: 'Пассажирские поезда', color: '#8B5CF6', dashed: false },
-    { id: '3', type: 'service', label: 'Хозяйственные поезда', color: '#10B981', dashed: true },
-  ]);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [trains, setTrains] = useState<Train[]>([]);
+  const [legendItems, setLegendItems] = useState<LegendItem[]>([]);
 
   const [trainDialogOpen, setTrainDialogOpen] = useState(false);
-  const [editingTrain, setEditingTrain] = useState<Train | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [trainToDelete, setTrainToDelete] = useState<string | null>(null);
+  const [stationDialogOpen, setStationDialogOpen] = useState(false);
+  const [lineDialogOpen, setLineDialogOpen] = useState(false);
   const [legendDialogOpen, setLegendDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  
+  const [editingTrain, setEditingTrain] = useState<Train | null>(null);
+  const [editingStation, setEditingStation] = useState<Station | null>(null);
+  const [editingLine, setEditingLine] = useState<Line | null>(null);
   const [editingLegend, setEditingLegend] = useState<LegendItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'train' | 'station' | 'line', id: number } | null>(null);
 
   const [trainForm, setTrainForm] = useState({
     number: '',
     type: 'freight' as Train['type'],
-    departureStation: '',
-    arrivalStation: '',
-    departureTime: 0,
-    arrivalTime: 8,
+    departure_station_id: 0,
+    arrival_station_id: 0,
+    departure_time: 0,
+    arrival_time: 8,
+  });
+
+  const [stationForm, setStationForm] = useState({
+    name: '',
+    position: 0,
+    line_id: undefined as number | undefined,
+  });
+
+  const [lineForm, setLineForm] = useState({
+    name: '',
+    color: '#0EA5E9',
   });
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
-  const saveTrain = () => {
-    const legendItem = legendItems.find(l => l.type === trainForm.type);
-    const color = legendItem?.color || '#0EA5E9';
+  useEffect(() => {
+    loadData();
+  }, []);
 
-    if (editingTrain) {
-      setTrains(trains.map(t => t.id === editingTrain.id ? { ...t, ...trainForm, color } : t));
-      toast({ title: 'Поезд обновлён' });
-    } else {
-      const train: Train = {
-        id: Date.now().toString(),
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [linesData, stationsData, trainsData, legendData] = await Promise.all([
+        api.lines.getAll(),
+        api.stations.getAll(),
+        api.trains.getAll(1),
+        api.legend.getAll(1),
+      ]);
+      setLines(linesData);
+      setStations(stationsData);
+      setTrains(trainsData);
+      setLegendItems(legendData);
+    } catch (error) {
+      toast({ title: 'Ошибка загрузки', description: String(error), variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveTrain = async () => {
+    try {
+      const legendItem = legendItems.find(l => l.type === trainForm.type);
+      const color = legendItem?.color || '#0EA5E9';
+
+      const trainData = {
         ...trainForm,
+        schedule_id: 1,
         color,
       };
-      setTrains([...trains, train]);
-      toast({ title: 'Поезд добавлен' });
-    }
 
-    setTrainForm({
-      number: '',
-      type: 'freight',
-      departureStation: '',
-      arrivalStation: '',
-      departureTime: 0,
-      arrivalTime: 8,
-    });
-    setEditingTrain(null);
-    setTrainDialogOpen(false);
+      if (editingTrain) {
+        await api.trains.update({ ...trainData, id: editingTrain.id });
+        toast({ title: 'Поезд обновлён' });
+      } else {
+        await api.trains.create(trainData);
+        toast({ title: 'Поезд добавлен' });
+      }
+
+      await loadData();
+      setTrainForm({
+        number: '',
+        type: 'freight',
+        departure_station_id: 0,
+        arrival_station_id: 0,
+        departure_time: 0,
+        arrival_time: 8,
+      });
+      setEditingTrain(null);
+      setTrainDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  const saveStation = async () => {
+    try {
+      if (editingStation) {
+        await api.stations.update({ ...stationForm, id: editingStation.id });
+        toast({ title: 'Станция обновлена' });
+      } else {
+        await api.stations.create(stationForm);
+        toast({ title: 'Станция добавлена' });
+      }
+
+      await loadData();
+      setStationForm({ name: '', position: 0, line_id: undefined });
+      setEditingStation(null);
+      setStationDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  const saveLine = async () => {
+    try {
+      if (editingLine) {
+        await api.lines.update({ ...lineForm, id: editingLine.id });
+        toast({ title: 'Линия обновлена' });
+      } else {
+        await api.lines.create(lineForm);
+        toast({ title: 'Линия добавлена' });
+      }
+
+      await loadData();
+      setLineForm({ name: '', color: '#0EA5E9' });
+      setEditingLine(null);
+      setLineDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  const saveLegendItem = async () => {
+    if (!editingLegend) return;
+    try {
+      await api.legend.update(editingLegend);
+      toast({ title: 'Легенда обновлена' });
+      await loadData();
+      setEditingLegend(null);
+      setLegendDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      if (deleteTarget.type === 'train') {
+        await api.trains.delete(deleteTarget.id);
+        toast({ title: 'Поезд удалён' });
+      } else if (deleteTarget.type === 'station') {
+        await api.stations.delete(deleteTarget.id);
+        toast({ title: 'Станция удалена' });
+      } else if (deleteTarget.type === 'line') {
+        await api.lines.delete(deleteTarget.id);
+        toast({ title: 'Линия удалена' });
+      }
+      await loadData();
+      setDeleteTarget(null);
+      setDeleteDialogOpen(false);
+    } catch (error) {
+      toast({ title: 'Ошибка удаления', description: String(error), variant: 'destructive' });
+    }
   };
 
   const openEditTrain = (train: Train) => {
@@ -115,31 +193,31 @@ const Index = () => {
     setTrainForm({
       number: train.number,
       type: train.type,
-      departureStation: train.departureStation,
-      arrivalStation: train.arrivalStation,
-      departureTime: train.departureTime,
-      arrivalTime: train.arrivalTime,
+      departure_station_id: train.departure_station_id,
+      arrival_station_id: train.arrival_station_id,
+      departure_time: train.departure_time,
+      arrival_time: train.arrival_time,
     });
     setTrainDialogOpen(true);
   };
 
-  const deleteTrain = () => {
-    if (trainToDelete) {
-      setTrains(trains.filter(t => t.id !== trainToDelete));
-      toast({ title: 'Поезд удалён', variant: 'destructive' });
-      setTrainToDelete(null);
-      setDeleteDialogOpen(false);
-    }
+  const openEditStation = (station: Station) => {
+    setEditingStation(station);
+    setStationForm({
+      name: station.name,
+      position: station.position,
+      line_id: station.line_id,
+    });
+    setStationDialogOpen(true);
   };
 
-  const saveLegendItem = () => {
-    if (editingLegend) {
-      setLegendItems(legendItems.map(l => l.id === editingLegend.id ? editingLegend : l));
-      setTrains(trains.map(t => t.type === editingLegend.type ? { ...t, color: editingLegend.color } : t));
-      toast({ title: 'Легенда обновлена' });
-      setEditingLegend(null);
-      setLegendDialogOpen(false);
-    }
+  const openEditLine = (line: Line) => {
+    setEditingLine(line);
+    setLineForm({
+      name: line.name,
+      color: line.color,
+    });
+    setLineDialogOpen(true);
   };
 
   const exportToPDF = () => {
@@ -166,13 +244,20 @@ const Index = () => {
     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
   };
 
-  const getStationPosition = (stationId: string) => {
-    return stations.find(s => s.id === stationId)?.position || 0;
-  };
-
   const getLegendItemByType = (type: Train['type']) => {
     return legendItems.find(l => l.type === type);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Icon name="Loader2" size={48} className="animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Загрузка данных...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -215,7 +300,7 @@ const Index = () => {
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label>Номер {isMetroMode ? 'состава' : 'поезда'}</Label>
+                    <Label>Номер</Label>
                     <Input
                       placeholder="№1"
                       value={trainForm.number}
@@ -223,28 +308,28 @@ const Index = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Тип {isMetroMode ? 'состава' : 'поезда'}</Label>
+                    <Label>Тип</Label>
                     <Select value={trainForm.type} onValueChange={(value: Train['type']) => setTrainForm({ ...trainForm, type: value })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="freight">{legendItems.find(l => l.type === 'freight')?.label}</SelectItem>
-                        <SelectItem value="passenger">{legendItems.find(l => l.type === 'passenger')?.label}</SelectItem>
-                        <SelectItem value="service">{legendItems.find(l => l.type === 'service')?.label}</SelectItem>
+                        {legendItems.map(l => (
+                          <SelectItem key={l.type} value={l.type}>{l.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Станция отправления</Label>
-                    <Select value={trainForm.departureStation} onValueChange={(value) => setTrainForm({ ...trainForm, departureStation: value })}>
+                    <Select value={String(trainForm.departure_station_id)} onValueChange={(value) => setTrainForm({ ...trainForm, departure_station_id: parseInt(value) })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {stations.map(s => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name} {isMetroMode && s.line && `(${s.line})`}
+                          <SelectItem key={s.id} value={String(s.id)}>
+                            {s.name} {isMetroMode && s.line_name && `(${s.line_name})`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -252,14 +337,14 @@ const Index = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>Станция прибытия</Label>
-                    <Select value={trainForm.arrivalStation} onValueChange={(value) => setTrainForm({ ...trainForm, arrivalStation: value })}>
+                    <Select value={String(trainForm.arrival_station_id)} onValueChange={(value) => setTrainForm({ ...trainForm, arrival_station_id: parseInt(value) })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {stations.map(s => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name} {isMetroMode && s.line && `(${s.line})`}
+                          <SelectItem key={s.id} value={String(s.id)}>
+                            {s.name} {isMetroMode && s.line_name && `(${s.line_name})`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -272,8 +357,8 @@ const Index = () => {
                         type="number"
                         min="0"
                         max="23"
-                        value={trainForm.departureTime}
-                        onChange={(e) => setTrainForm({ ...trainForm, departureTime: parseInt(e.target.value) || 0 })}
+                        value={trainForm.departure_time}
+                        onChange={(e) => setTrainForm({ ...trainForm, departure_time: parseInt(e.target.value) || 0 })}
                       />
                     </div>
                     <div className="space-y-2">
@@ -282,8 +367,8 @@ const Index = () => {
                         type="number"
                         min="0"
                         max="23"
-                        value={trainForm.arrivalTime}
-                        onChange={(e) => setTrainForm({ ...trainForm, arrivalTime: parseInt(e.target.value) || 0 })}
+                        value={trainForm.arrival_time}
+                        onChange={(e) => setTrainForm({ ...trainForm, arrival_time: parseInt(e.target.value) || 0 })}
                       />
                     </div>
                   </div>
@@ -297,7 +382,7 @@ const Index = () => {
         </div>
 
         <Tabs defaultValue="graph" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="graph" className="gap-2">
               <Icon name="LineChart" size={16} />
               График
@@ -309,6 +394,10 @@ const Index = () => {
             <TabsTrigger value="stations" className="gap-2">
               <Icon name="MapPin" size={16} />
               Станции ({stations.length})
+            </TabsTrigger>
+            <TabsTrigger value="lines" className="gap-2">
+              <Icon name="Route" size={16} />
+              Линии ({lines.length})
             </TabsTrigger>
             <TabsTrigger value="legend" className="gap-2">
               <Icon name="Info" size={16} />
@@ -326,7 +415,7 @@ const Index = () => {
                 <Button variant="outline" size="sm" onClick={() => setZoom(Math.min(2, zoom + 0.1))}>
                   <Icon name="ZoomIn" size={16} />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => { setZoom(1); setPanX(0); }}>
+                <Button variant="outline" size="sm" onClick={() => setZoom(1)}>
                   <Icon name="Minimize2" size={16} />
                 </Button>
               </div>
@@ -337,7 +426,6 @@ const Index = () => {
                   width={`${100 * zoom}%`} 
                   height="600" 
                   className="border border-border rounded-lg bg-card"
-                  style={{ transform: `translateX(${panX}px)` }}
                 >
                   <defs>
                     <pattern id="grid" width="60" height="150" patternUnits="userSpaceOnUse">
@@ -376,7 +464,7 @@ const Index = () => {
                         y1={100 + i * 150}
                         x2="100%"
                         y2={100 + i * 150}
-                        stroke="hsl(var(--border))"
+                        stroke={station.line_color || 'hsl(var(--border))'}
                         strokeWidth="2"
                       />
                       <text
@@ -387,20 +475,22 @@ const Index = () => {
                         fontWeight="600"
                       >
                         {station.name}
-                        {isMetroMode && station.line && (
-                          <tspan fill="hsl(var(--muted-foreground))" fontSize="12"> ({station.line})</tspan>
+                        {isMetroMode && station.line_name && (
+                          <tspan fill={station.line_color} fontSize="12"> ({station.line_name})</tspan>
                         )}
                       </text>
                     </g>
                   ))}
 
                   {trains.map(train => {
-                    const depPos = getStationPosition(train.departureStation);
-                    const arrPos = getStationPosition(train.arrivalStation);
-                    const x1 = 60 + train.departureTime * 60;
-                    const y1 = 100 + depPos * 150;
-                    const x2 = 60 + train.arrivalTime * 60;
-                    const y2 = 100 + arrPos * 150;
+                    const depStation = stations.find(s => s.id === train.departure_station_id);
+                    const arrStation = stations.find(s => s.id === train.arrival_station_id);
+                    if (!depStation || !arrStation) return null;
+
+                    const x1 = 60 + train.departure_time * 60;
+                    const y1 = 100 + depStation.position * 150;
+                    const x2 = 60 + train.arrival_time * 60;
+                    const y2 = 100 + arrStation.position * 150;
                     const legendItem = getLegendItemByType(train.type);
 
                     return (
@@ -439,6 +529,9 @@ const Index = () => {
             <div className="grid gap-4">
               {trains.map(train => {
                 const legendItem = getLegendItemByType(train.type);
+                const depStation = stations.find(s => s.id === train.departure_station_id);
+                const arrStation = stations.find(s => s.id === train.arrival_station_id);
+                
                 return (
                   <Card key={train.id} className="p-4">
                     <div className="flex items-center justify-between">
@@ -456,17 +549,17 @@ const Index = () => {
                       <div className="flex items-center gap-4">
                         <div className="text-right">
                           <div className="text-sm font-medium">
-                            {stations.find(s => s.id === train.departureStation)?.name} → {stations.find(s => s.id === train.arrivalStation)?.name}
+                            {depStation?.name} → {arrStation?.name}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {train.departureTime}:00 - {train.arrivalTime}:00
+                            {train.departure_time}:00 - {train.arrival_time}:00
                           </div>
                         </div>
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => openEditTrain(train)}>
                             <Icon name="Pencil" size={16} />
                           </Button>
-                          <Button variant="destructive" size="sm" onClick={() => { setTrainToDelete(train.id); setDeleteDialogOpen(true); }}>
+                          <Button variant="destructive" size="sm" onClick={() => { setDeleteTarget({ type: 'train', id: train.id }); setDeleteDialogOpen(true); }}>
                             <Icon name="Trash2" size={16} />
                           </Button>
                         </div>
@@ -479,19 +572,152 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="stations" className="mt-6">
+            <div className="mb-4">
+              <Dialog open={stationDialogOpen} onOpenChange={setStationDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => setEditingStation(null)} className="gap-2">
+                    <Icon name="Plus" size={20} />
+                    Добавить станцию
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editingStation ? 'Редактировать' : 'Новая'} станция</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Название</Label>
+                      <Input
+                        value={stationForm.name}
+                        onChange={(e) => setStationForm({ ...stationForm, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Позиция</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={stationForm.position}
+                        onChange={(e) => setStationForm({ ...stationForm, position: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Линия (опционально)</Label>
+                      <Select value={String(stationForm.line_id || '')} onValueChange={(value) => setStationForm({ ...stationForm, line_id: value ? parseInt(value) : undefined })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Без линии" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Без линии</SelectItem>
+                          {lines.map(l => (
+                            <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={saveStation} className="w-full">
+                      {editingStation ? 'Сохранить' : 'Добавить'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+            
             <div className="grid gap-4">
               {stations.map(station => (
                 <Card key={station.id} className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-primary/10 rounded-lg">
-                      <Icon name="MapPin" size={24} className="text-primary" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-lg">{station.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Позиция: {station.position + 1}
-                        {isMetroMode && station.line && ` • Линия: ${station.line}`}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-lg" style={{ backgroundColor: station.line_color ? station.line_color + '20' : 'hsl(var(--primary) / 0.1)' }}>
+                        <Icon name="MapPin" size={24} style={{ color: station.line_color || 'hsl(var(--primary))' }} />
                       </div>
+                      <div>
+                        <div className="font-bold text-lg">{station.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          Позиция: {station.position + 1}
+                          {isMetroMode && station.line_name && ` • Линия: ${station.line_name}`}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditStation(station)}>
+                        <Icon name="Pencil" size={16} />
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => { setDeleteTarget({ type: 'station', id: station.id }); setDeleteDialogOpen(true); }}>
+                        <Icon name="Trash2" size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="lines" className="mt-6">
+            <div className="mb-4">
+              <Dialog open={lineDialogOpen} onOpenChange={setLineDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => setEditingLine(null)} className="gap-2">
+                    <Icon name="Plus" size={20} />
+                    Добавить линию
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>{editingLine ? 'Редактировать' : 'Новая'} линия</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Название</Label>
+                      <Input
+                        value={lineForm.name}
+                        onChange={(e) => setLineForm({ ...lineForm, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Цвет</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="color"
+                          value={lineForm.color}
+                          onChange={(e) => setLineForm({ ...lineForm, color: e.target.value })}
+                          className="w-20 h-10"
+                        />
+                        <Input
+                          value={lineForm.color}
+                          onChange={(e) => setLineForm({ ...lineForm, color: e.target.value })}
+                          placeholder="#0EA5E9"
+                        />
+                      </div>
+                    </div>
+                    <Button onClick={saveLine} className="w-full">
+                      {editingLine ? 'Сохранить' : 'Добавить'}
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+            
+            <div className="grid gap-4">
+              {lines.map(line => (
+                <Card key={line.id} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: line.color + '20' }}>
+                        <Icon name="Route" size={24} style={{ color: line.color }} />
+                      </div>
+                      <div>
+                        <div className="font-bold text-lg">{line.name}</div>
+                        <div className="text-sm" style={{ color: line.color }}>{line.color}</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEditLine(line)}>
+                        <Icon name="Pencil" size={16} />
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => { setDeleteTarget({ type: 'line', id: line.id }); setDeleteDialogOpen(true); }}>
+                        <Icon name="Trash2" size={16} />
+                      </Button>
                     </div>
                   </div>
                 </Card>
@@ -501,9 +727,7 @@ const Index = () => {
 
           <TabsContent value="legend" className="mt-6">
             <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">Условные обозначения</h3>
-              </div>
+              <h3 className="text-xl font-bold mb-4">Условные обозначения</h3>
               <div className="space-y-4">
                 {legendItems.map(item => (
                   <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
@@ -546,14 +770,14 @@ const Index = () => {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Удалить {isMetroMode ? 'состав' : 'поезд'}?</AlertDialogTitle>
+            <AlertDialogTitle>Удалить {deleteTarget?.type === 'train' ? (isMetroMode ? 'состав' : 'поезд') : deleteTarget?.type === 'station' ? 'станцию' : 'линию'}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Это действие нельзя отменить. {isMetroMode ? 'Состав' : 'Поезд'} будет удалён из графика.
+              Это действие нельзя отменить.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteTrain}>Удалить</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>Удалить</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
