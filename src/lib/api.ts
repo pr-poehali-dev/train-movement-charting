@@ -28,6 +28,8 @@ export interface Train {
   departure_time: number;
   arrival_time: number;
   color: string;
+  line_style?: 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'double';
+  line_width?: number;
   created_at?: string;
 }
 

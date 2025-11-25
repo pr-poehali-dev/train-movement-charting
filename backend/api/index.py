@@ -157,8 +157,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 cur.execute(
                     '''INSERT INTO trains 
                     (schedule_id, number, type, departure_station_id, arrival_station_id, 
-                     departure_time, arrival_time, color) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *''',
+                     departure_time, arrival_time, color, line_style, line_width) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *''',
                     (
                         body_data.get('schedule_id', 1),
                         body_data.get('number'),
@@ -167,7 +167,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         body_data.get('arrival_station_id'),
                         body_data.get('departure_time'),
                         body_data.get('arrival_time'),
-                        body_data.get('color')
+                        body_data.get('color'),
+                        body_data.get('line_style', 'solid'),
+                        body_data.get('line_width', 2.5)
                     )
                 )
                 conn.commit()
@@ -238,13 +240,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 cur.execute(
                     '''UPDATE trains SET 
                     number = %s, type = %s, departure_station_id = %s, 
-                    arrival_station_id = %s, departure_time = %s, arrival_time = %s, color = %s 
+                    arrival_station_id = %s, departure_time = %s, arrival_time = %s, color = %s,
+                    line_style = %s, line_width = %s
                     WHERE id = %s RETURNING *''',
                     (
                         body_data.get('number'), body_data.get('type'),
                         body_data.get('departure_station_id'), body_data.get('arrival_station_id'),
                         body_data.get('departure_time'), body_data.get('arrival_time'),
-                        body_data.get('color'), item_id
+                        body_data.get('color'),
+                        body_data.get('line_style', 'solid'),
+                        body_data.get('line_width', 2.5),
+                        item_id
                     )
                 )
                 conn.commit()

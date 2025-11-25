@@ -57,6 +57,8 @@ const Index = () => {
     arrival_station_id: 0,
     departure_time: 0,
     arrival_time: 480,
+    line_style: 'solid' as 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'double',
+    line_width: 2.5,
   });
 
   const [stationForm, setStationForm] = useState({
@@ -133,6 +135,8 @@ const Index = () => {
         arrival_station_id: 0,
         departure_time: 0,
         arrival_time: 480,
+        line_style: 'solid',
+        line_width: 2.5,
       });
       setEditingTrain(null);
       setTrainDialogOpen(false);
@@ -257,6 +261,8 @@ const Index = () => {
       arrival_station_id: train.arrival_station_id,
       departure_time: train.departure_time,
       arrival_time: train.arrival_time,
+      line_style: train.line_style || 'solid',
+      line_width: train.line_width || 2.5,
     });
     setTrainDialogOpen(true);
   };
@@ -700,6 +706,108 @@ const Index = () => {
                       </div>
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <Label>Стиль линии</Label>
+                    <Select value={trainForm.line_style} onValueChange={(value: any) => setTrainForm({ ...trainForm, line_style: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="solid">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="2"><line x1="0" y1="1" x2="40" y2="1" stroke="currentColor" strokeWidth="2" /></svg>
+                            <span>Сплошная</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="dashed">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="2"><line x1="0" y1="1" x2="40" y2="1" stroke="currentColor" strokeWidth="2" strokeDasharray="4,2" /></svg>
+                            <span>Пунктирная</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="dotted">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="2"><line x1="0" y1="1" x2="40" y2="1" stroke="currentColor" strokeWidth="2" strokeDasharray="1,2" /></svg>
+                            <span>Точечная</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="dash-dot">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="2"><line x1="0" y1="1" x2="40" y2="1" stroke="currentColor" strokeWidth="2" strokeDasharray="6,2,1,2" /></svg>
+                            <span>Штрих-пунктир</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="double">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="6">
+                              <line x1="0" y1="1" x2="40" y2="1" stroke="currentColor" strokeWidth="1.5" />
+                              <line x1="0" y1="5" x2="40" y2="5" stroke="currentColor" strokeWidth="1.5" />
+                            </svg>
+                            <span>Двойная</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Толщина линии</Label>
+                    <Select value={String(trainForm.line_width)} onValueChange={(value) => setTrainForm({ ...trainForm, line_width: parseFloat(value) })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1.5">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="2"><line x1="0" y1="1" x2="40" y2="1" stroke="currentColor" strokeWidth="1.5" /></svg>
+                            <span>Тонкая (1.5px)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="2.5">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="3"><line x1="0" y1="1.5" x2="40" y2="1.5" stroke="currentColor" strokeWidth="2.5" /></svg>
+                            <span>Средняя (2.5px)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="3.5">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="currentColor" strokeWidth="3.5" /></svg>
+                            <span>Жирная (3.5px)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="5">
+                          <div className="flex items-center gap-2">
+                            <svg width="40" height="6"><line x1="0" y1="3" x2="40" y2="3" stroke="currentColor" strokeWidth="5" /></svg>
+                            <span>Очень жирная (5px)</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="p-4 border rounded-lg bg-muted/50">
+                    <div className="text-sm text-muted-foreground mb-2">Предпросмотр:</div>
+                    <svg width="100%" height="30">
+                      {trainForm.line_style === 'double' ? (
+                        <>
+                          <line x1="0" y1="13" x2="100%" y2="13" stroke="currentColor" strokeWidth={trainForm.line_width * 0.6} />
+                          <line x1="0" y1="17" x2="100%" y2="17" stroke="currentColor" strokeWidth={trainForm.line_width * 0.6} />
+                        </>
+                      ) : (
+                        <line
+                          x1="0"
+                          y1="15"
+                          x2="100%"
+                          y2="15"
+                          stroke="currentColor"
+                          strokeWidth={trainForm.line_width}
+                          strokeDasharray={
+                            trainForm.line_style === 'dashed' ? '6,4' :
+                            trainForm.line_style === 'dotted' ? '2,3' :
+                            trainForm.line_style === 'dash-dot' ? '10,3,2,3' : '0'
+                          }
+                        />
+                      )}
+                    </svg>
+                  </div>
                   <Button onClick={saveTrain} className="w-full">
                     {editingTrain ? 'Сохранить' : 'Добавить'}
                   </Button>
@@ -1002,25 +1110,48 @@ const Index = () => {
                     const y1 = 80 + (depStation.distance_km || depStation.position) * 7.56;
                     const y2 = 80 + (arrStation.distance_km || arrStation.position) * 7.56;
                     
-                    const legendItem = getLegendItemByType(train.type);
-                    const lineStyle = legendItem?.line_style || 'solid';
-                    const strokeDasharray = lineStyle === 'dashed' ? '6,4' : lineStyle === 'dotted' ? '2,3' : '0';
-                    
-                    // Направление: нечетные (freight) - сверху вниз, четные (passenger/service) - снизу вверх
-                    const isOdd = train.type === 'freight';
+                    const lineStyle = train.line_style || 'solid';
+                    const lineWidth = train.line_width || 2.5;
+                    const strokeDasharray = 
+                      lineStyle === 'dashed' ? '6,4' : 
+                      lineStyle === 'dotted' ? '2,3' : 
+                      lineStyle === 'dash-dot' ? '10,3,2,3' : '0';
                     
                     return (
                       <g key={train.id}>
-                        <line
-                          x1={x1}
-                          y1={y1}
-                          x2={x2}
-                          y2={y2}
-                          stroke={train.color}
-                          strokeWidth="2.5"
-                          strokeDasharray={strokeDasharray}
-                          className="transition-all duration-300 cursor-pointer"
-                        />
+                        {lineStyle === 'double' ? (
+                          <>
+                            <line
+                              x1={x1}
+                              y1={y1 - lineWidth * 0.4}
+                              x2={x2}
+                              y2={y2 - lineWidth * 0.4}
+                              stroke={train.color}
+                              strokeWidth={lineWidth * 0.6}
+                              className="transition-all duration-300 cursor-pointer"
+                            />
+                            <line
+                              x1={x1}
+                              y1={y1 + lineWidth * 0.4}
+                              x2={x2}
+                              y2={y2 + lineWidth * 0.4}
+                              stroke={train.color}
+                              strokeWidth={lineWidth * 0.6}
+                              className="transition-all duration-300 cursor-pointer"
+                            />
+                          </>
+                        ) : (
+                          <line
+                            x1={x1}
+                            y1={y1}
+                            x2={x2}
+                            y2={y2}
+                            stroke={train.color}
+                            strokeWidth={lineWidth}
+                            strokeDasharray={strokeDasharray}
+                            className="transition-all duration-300 cursor-pointer"
+                          />
+                        )}
                         
                         {/* Метки времени на точках отправления и прибытия */}
                         <circle cx={x1} cy={y1} r="4" fill={train.color} />
