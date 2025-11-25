@@ -924,13 +924,13 @@ const Index = () => {
                     
                     if (!d1 || !a1 || !d2 || !a2) return null;
                     
-                    const x1 = 150 + (t1.departure_time * 60) * (15.12 / 10);
-                    const x2 = 150 + (t1.arrival_time * 60) * (15.12 / 10);
+                    const x1 = 150 + t1.departure_time * (15.12 / 10);
+                    const x2 = 150 + t1.arrival_time * (15.12 / 10);
                     const y1 = 80 + (d1.distance_km || d1.position) * 7.56;
                     const y2 = 80 + (a1.distance_km || a1.position) * 7.56;
                     
-                    const x3 = 150 + (t2.departure_time * 60) * (15.12 / 10);
-                    const x4 = 150 + (t2.arrival_time * 60) * (15.12 / 10);
+                    const x3 = 150 + t2.departure_time * (15.12 / 10);
+                    const x4 = 150 + t2.arrival_time * (15.12 / 10);
                     const y3 = 80 + (d2.distance_km || d2.position) * 7.56;
                     const y4 = 80 + (a2.distance_km || a2.position) * 7.56;
                     
@@ -980,9 +980,9 @@ const Index = () => {
                     
                     if (train.departure_time >= 24 * 60 || train.arrival_time >= 24 * 60) return null;
                     
-                    // Координаты времени (15.12px = 10 минут)
-                    const x1 = 150 + (train.departure_time * 60) * (15.12 / 10);
-                    const x2 = 150 + (train.arrival_time * 60) * (15.12 / 10);
+                    // Координаты времени (15.12px = 10 минут, время уже в минутах)
+                    const x1 = 150 + train.departure_time * (15.12 / 10);
+                    const x2 = 150 + train.arrival_time * (15.12 / 10);
                     
                     const maxX = 150 + 144 * 15.12;
                     if (x1 > maxX || x2 > maxX) return null;
@@ -1043,8 +1043,8 @@ const Index = () => {
                             const stopStation = stations.find(s => s.id === stop.station_id);
                             if (!stopStation) return null;
                             
-                            const stopX1 = 150 + (stop.arrival_time * 60) * (15.12 / 10);
-                            const stopX2 = 150 + (stop.departure_time * 60) * (15.12 / 10);
+                            const stopX1 = 150 + stop.arrival_time * (15.12 / 10);
+                            const stopX2 = 150 + stop.departure_time * (15.12 / 10);
                             const stopY = 80 + (stopStation.distance_km || stopStation.position) * 7.56;
                             
                             return (

@@ -38,7 +38,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
-    path = event.get('queryStringParameters', {}).get('path', '')
+    query_params = event.get('queryStringParameters') or {}
+    path = query_params.get('path', '')
     
     try:
         conn = get_db_connection()
@@ -72,7 +73,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             elif path == 'trains':
-                schedule_id = event.get('queryStringParameters', {}).get('schedule_id', '1')
+                schedule_id = query_params.get('schedule_id', '1')
                 cur.execute('SELECT * FROM trains WHERE schedule_id = %s ORDER BY id', (schedule_id,))
                 trains = cur.fetchall()
                 return {
@@ -83,7 +84,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             elif path == 'legend':
-                schedule_id = event.get('queryStringParameters', {}).get('schedule_id', '1')
+                schedule_id = query_params.get('schedule_id', '1')
                 cur.execute('SELECT * FROM legend_items WHERE schedule_id = %s', (schedule_id,))
                 items = cur.fetchall()
                 return {
@@ -94,7 +95,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             elif path == 'train_stops':
-                train_id = event.get('queryStringParameters', {}).get('train_id')
+                train_id = query_params.get('train_id')
                 if train_id:
                     cur.execute('''
                         SELECT ts.*, s.name as station_name, s.distance_km, s.position
@@ -287,7 +288,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
         
         elif method == 'DELETE':
-            item_id = event.get('queryStringParameters', {}).get('id')
+            item_id = query_params.get('id')
             
             if not item_id:
                 return {

@@ -154,7 +154,12 @@ export const api = {
         ? `${API_URL}?path=train_stops&train_id=${trainId}`
         : `${API_URL}?path=train_stops`;
       const res = await fetch(url);
-      return res.json();
+      if (!res.ok) {
+        console.error('HTTP', res.status, ':', url);
+        return [];
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
     create: async (data: Omit<TrainStop, 'id' | 'stop_duration' | 'created_at'>): Promise<TrainStop> => {
       const res = await fetch(`${API_URL}?path=train_stops`, {
