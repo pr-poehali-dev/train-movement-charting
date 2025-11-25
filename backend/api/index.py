@@ -305,6 +305,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             if path == 'stations':
+                # Сначала удаляем связанные остановки поездов
+                cur.execute('DELETE FROM train_stops WHERE station_id = %s', (int(item_id),))
+                # Затем удаляем поезда, которые отправляются или прибывают на эту станцию
+                cur.execute('DELETE FROM trains WHERE departure_station_id = %s OR arrival_station_id = %s', (int(item_id), int(item_id)))
+                # И наконец удаляем саму станцию
                 cur.execute('DELETE FROM stations WHERE id = %s RETURNING id', (int(item_id),))
                 deleted = cur.fetchone()
                 conn.commit()
