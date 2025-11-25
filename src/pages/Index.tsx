@@ -15,11 +15,8 @@ import { api, Line, Station, Train, LegendItem } from '@/lib/api';
 const Index = () => {
   const [isMetroMode, setIsMetroMode] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [loading, setLoading] = useState(true);
+  const [conflicts, setConflicts] = useState<Array<{train1: Train, train2: Train}>>([]);
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -64,7 +61,9 @@ const Index = () => {
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   useEffect(() => {
-    loadData();
+    loadData().then(() => {
+      if (trains.length > 0) detectConflicts();
+    });
   }, []);
 
   const loadData = async () => {
@@ -107,6 +106,7 @@ const Index = () => {
       }
 
       await loadData();
+      detectConflicts();
       setTrainForm({
         number: '',
         type: 'freight',
@@ -261,31 +261,67 @@ const Index = () => {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setDragStart({ x: e.clientX - panX, y: e.clientY - panY });
+  const calculateSpeed = (train: Train) => {
+    const depStation = stations.find(s => s.id === train.departure_station_id);
+    const arrStation = stations.find(s => s.id === train.arrival_station_id);
+    if (!depStation || !arrStation) return 0;
+    
+    const distance = Math.abs(arrStation.distance_km - depStation.distance_km);
+    const timeMinutes = Math.abs(train.arrival_time - train.departure_time);
+    const timeHours = timeMinutes / 60;
+    
+    return timeHours > 0 ? distance / timeHours : 0;
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPanX(e.clientX - dragStart.x);
-    setPanY(e.clientY - dragStart.y);
+  const checkIntersection = (t1: Train, t2: Train) => {
+    const d1 = stations.find(s => s.id === t1.departure_station_id);
+    const a1 = stations.find(s => s.id === t1.arrival_station_id);
+    const d2 = stations.find(s => s.id === t2.departure_station_id);
+    const a2 = stations.find(s => s.id === t2.arrival_station_id);
+    
+    if (!d1 || !a1 || !d2 || !a2) return false;
+    
+    const x1 = t1.departure_time;
+    const x2 = t1.arrival_time;
+    const y1 = d1.distance_km;
+    const y2 = a1.distance_km;
+    
+    const x3 = t2.departure_time;
+    const x4 = t2.arrival_time;
+    const y3 = d2.distance_km;
+    const y4 = a2.distance_km;
+    
+    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(denom) < 0.001) return false;
+    
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+    
+    return t > 0 && t < 1 && u > 0 && u < 1;
   };
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setZoom(Math.max(0.3, Math.min(3, zoom + delta)));
-  };
-
-  const resetView = () => {
-    setZoom(1);
-    setPanX(0);
-    setPanY(0);
+  const detectConflicts = () => {
+    const foundConflicts: Array<{train1: Train, train2: Train}> = [];
+    
+    for (let i = 0; i < trains.length; i++) {
+      for (let j = i + 1; j < trains.length; j++) {
+        if (checkIntersection(trains[i], trains[j])) {
+          foundConflicts.push({ train1: trains[i], train2: trains[j] });
+        }
+      }
+    }
+    
+    setConflicts(foundConflicts);
+    
+    if (foundConflicts.length > 0) {
+      toast({ 
+        title: `Обнаружено конфликтов: ${foundConflicts.length}`,
+        description: 'Проверьте вкладку "График" для деталей',
+        variant: 'destructive'
+      });
+    } else {
+      toast({ title: 'Конфликтов не обнаружено', description: 'Все маршруты безопасны' });
+    }
   };
 
   if (loading) {
@@ -460,7 +496,7 @@ const Index = () => {
         </div>
 
         <Tabs defaultValue="graph" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 h-auto">
+          <TabsList className="grid w-full grid-cols-6 h-auto">
             <TabsTrigger value="graph" className="gap-1 md:gap-2 text-xs md:text-sm py-2">
               <Icon name="LineChart" size={14} className="md:w-4 md:h-4" />
               <span className="hidden sm:inline">График</span>
@@ -484,46 +520,53 @@ const Index = () => {
               <Icon name="Info" size={14} className="md:w-4 md:h-4" />
               <span className="hidden sm:inline">Легенда</span>
             </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-1 md:gap-2 text-xs md:text-sm py-2">
+              <Icon name="BarChart3" size={14} className="md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Аналитика</span>
+              {conflicts.length > 0 && (
+                <span className="ml-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                  {conflicts.length}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="graph" className="mt-4 md:mt-6">
             <Card className="p-3 md:p-6">
               <div className="flex items-center gap-2 md:gap-4 mb-3 md:mb-4 flex-wrap">
-                <Button variant="outline" size="sm" onClick={() => setZoom(Math.max(0.3, zoom - 0.1))}>
+                <Button variant="outline" size="sm" onClick={() => setZoom(Math.max(0.5, zoom - 0.2))}>
                   <Icon name="ZoomOut" size={14} className="md:w-4 md:h-4" />
                 </Button>
                 <span className="text-xs md:text-sm font-medium min-w-[60px] text-center">{Math.round(zoom * 100)}%</span>
-                <Button variant="outline" size="sm" onClick={() => setZoom(Math.min(3, zoom + 0.1))}>
+                <Button variant="outline" size="sm" onClick={() => setZoom(Math.min(3, zoom + 0.2))}>
                   <Icon name="ZoomIn" size={14} className="md:w-4 md:h-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={resetView}>
+                <Button variant="outline" size="sm" onClick={() => setZoom(1)}>
                   <Icon name="Minimize2" size={14} className="md:w-4 md:h-4" />
                 </Button>
-                <span className="text-xs text-muted-foreground hidden md:inline">Прокрутка: колесо мыши • Перемещение: перетаскивание</span>
-                <span className="text-xs text-muted-foreground md:hidden">Жесты: зум и прокрутка</span>
+                <Button variant="outline" size="sm" onClick={detectConflicts} className="gap-2">
+                  <Icon name="AlertTriangle" size={14} className="md:w-4 md:h-4" />
+                  <span className="hidden md:inline">Проверить конфликты</span>
+                </Button>
+                {conflicts.length > 0 && (
+                  <span className="text-xs text-destructive font-medium">
+                    ⚠️ {conflicts.length} конфликт(-ов)
+                  </span>
+                )}
               </div>
               
               <div 
                 ref={containerRef}
-                className="relative overflow-auto touch-pan-x touch-pan-y" 
-                style={{ height: '400px' }}
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onWheel={handleWheel}
+                className="relative overflow-auto" 
+                style={{ height: '500px', width: '100%' }}
               >
                 <svg 
                   ref={svgRef}
                   width={2400 * zoom}
                   height={700 * zoom}
+                  viewBox={`0 0 2400 700`}
+                  preserveAspectRatio="xMinYMin meet"
                   className="border border-border rounded-lg bg-card"
-                  style={{ 
-                    transform: `translate(${panX}px, ${panY}px)`,
-                    cursor: isDragging ? 'grabbing' : 'grab',
-                    minWidth: '100%',
-                    minHeight: '100%'
-                  }}
                 >
                   <defs>
                     <pattern id="grid-10min" width="16" height="2" patternUnits="userSpaceOnUse">
@@ -536,7 +579,7 @@ const Index = () => {
                   
                   <rect width="100%" height="100%" fill="hsl(var(--card))" />
                   
-                  {/* Сетка времени: вертикальные линии каждые 10 минут (4мм = 10мин, в пикселях ~16px) */}
+                  {/* Сетка времени */}
                   {Array.from({ length: 145 }, (_, i) => {
                     const x = 80 + i * 16;
                     const hour = Math.floor(i / 6);
@@ -611,6 +654,66 @@ const Index = () => {
                         </g>
                       );
                     })}
+                  
+                  {/* Конфликты (подсветка) */}
+                  {conflicts.map((conflict, idx) => {
+                    const t1 = conflict.train1;
+                    const t2 = conflict.train2;
+                    
+                    const d1 = stations.find(s => s.id === t1.departure_station_id);
+                    const a1 = stations.find(s => s.id === t1.arrival_station_id);
+                    const d2 = stations.find(s => s.id === t2.departure_station_id);
+                    const a2 = stations.find(s => s.id === t2.arrival_station_id);
+                    
+                    if (!d1 || !a1 || !d2 || !a2) return null;
+                    
+                    const x1 = 80 + (t1.departure_time * 60) * (16 / 10);
+                    const x2 = 80 + (t1.arrival_time * 60) * (16 / 10);
+                    const y1 = 80 + d1.position * 8;
+                    const y2 = 80 + a1.position * 8;
+                    
+                    const x3 = 80 + (t2.departure_time * 60) * (16 / 10);
+                    const x4 = 80 + (t2.arrival_time * 60) * (16 / 10);
+                    const y3 = 80 + d2.position * 8;
+                    const y4 = 80 + a2.position * 8;
+                    
+                    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+                    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+                    
+                    const intersectX = x1 + t * (x2 - x1);
+                    const intersectY = y1 + t * (y2 - y1);
+                    
+                    return (
+                      <g key={`conflict-${idx}`}>
+                        <circle 
+                          cx={intersectX} 
+                          cy={intersectY} 
+                          r="12" 
+                          fill="red" 
+                          opacity="0.3"
+                          className="animate-pulse"
+                        />
+                        <circle 
+                          cx={intersectX} 
+                          cy={intersectY} 
+                          r="8" 
+                          fill="none" 
+                          stroke="red" 
+                          strokeWidth="2"
+                        />
+                        <text
+                          x={intersectX}
+                          y={intersectY + 25}
+                          textAnchor="middle"
+                          fill="red"
+                          fontSize="11"
+                          fontWeight="bold"
+                        >
+                          ⚠️ Конфликт
+                        </text>
+                      </g>
+                    );
+                  })}
                   
                   {/* Линии движения поездов */}
                   {trains.map(train => {
@@ -705,7 +808,90 @@ const Index = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="trains" className="mt-6">
+          <TabsContent value="analytics" className="mt-4 md:mt-6">
+            <div className="grid gap-4">
+              <Card className="p-4 md:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg md:text-xl font-bold">Средняя скорость поездов</h3>
+                  <Button onClick={detectConflicts} variant="outline" size="sm" className="gap-2">
+                    <Icon name="RefreshCw" size={16} />
+                    Обновить
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {trains.map(train => {
+                    const speed = calculateSpeed(train);
+                    const depStation = stations.find(s => s.id === train.departure_station_id);
+                    const arrStation = stations.find(s => s.id === train.arrival_station_id);
+                    const distance = depStation && arrStation ? Math.abs(arrStation.distance_km - depStation.distance_km) : 0;
+                    
+                    return (
+                      <div key={train.id} className="flex items-center justify-between p-3 border rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: train.color }} />
+                          <div>
+                            <div className="font-medium">{train.number}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {depStation?.name} → {arrStation?.name}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-bold text-lg">{speed.toFixed(1)} км/ч</div>
+                          <div className="text-xs text-muted-foreground">{distance.toFixed(1)} км</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+
+              <Card className="p-4 md:p-6">
+                <h3 className="text-lg md:text-xl font-bold mb-4">
+                  Конфликты маршрутов
+                  {conflicts.length > 0 && (
+                    <span className="ml-2 text-destructive">({conflicts.length})</span>
+                  )}
+                </h3>
+                {conflicts.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Icon name="CheckCircle2" size={48} className="mx-auto mb-2 text-green-500" />
+                    <p>Конфликтов не обнаружено</p>
+                    <p className="text-sm">Все маршруты безопасны</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {conflicts.map((conflict, idx) => (
+                      <div key={idx} className="p-3 border border-destructive rounded-lg bg-destructive/5">
+                        <div className="flex items-start gap-2">
+                          <Icon name="AlertTriangle" size={20} className="text-destructive mt-0.5" />
+                          <div className="flex-1">
+                            <div className="font-medium text-destructive mb-1">
+                              Конфликт #{idx + 1}
+                            </div>
+                            <div className="text-sm space-y-1">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: conflict.train1.color }} />
+                                <span>Поезд {conflict.train1.number}</span>
+                                <span className="text-muted-foreground">↔</span>
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: conflict.train2.color }} />
+                                <span>Поезд {conflict.train2.number}</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                Пересечение маршрутов в одно время
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="trains" className="mt-4 md:mt-6">
             <div className="grid gap-4">
               {trains.map(train => {
                 const legendItem = getLegendItemByType(train.type);
@@ -733,6 +919,9 @@ const Index = () => {
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {formatTime(train.departure_time)} - {formatTime(train.arrival_time)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            ⚡ {calculateSpeed(train).toFixed(1)} км/ч
                           </div>
                         </div>
                         <div className="flex gap-2">
