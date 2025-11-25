@@ -38,11 +38,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
+    path = event.get('queryStringParameters', {}).get('path', '')
+    
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
-        path = event.get('queryStringParameters', {}).get('path', '')
         
         if method == 'GET':
             if path == 'lines':
@@ -289,8 +289,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'isBase64Encoded': False
                     }
         
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
         
         return {
             'statusCode': 404,
@@ -300,6 +302,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     except Exception as e:
+        try:
+            if 'cur' in locals() and cur:
+                cur.close()
+            if 'conn' in locals() and conn:
+                conn.close()
+        except:
+            pass
+        
         return {
             'statusCode': 500,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},

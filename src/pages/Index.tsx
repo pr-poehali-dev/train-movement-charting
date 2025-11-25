@@ -248,7 +248,7 @@ const Index = () => {
     
     const pxPerMm = 3.7795275591;
     const svgWidth = parseFloat(svgClone.getAttribute('width') || '2478');
-    const svgHeight = parseFloat(svgClone.getAttribute('height') || '500');
+    const svgHeight = parseFloat(svgClone.getAttribute('height') || '2478');
     
     canvas.width = svgWidth;
     canvas.height = svgHeight;
@@ -716,18 +716,22 @@ const Index = () => {
                 className="relative overflow-auto" 
                 style={{ height: '500px', width: '100%' }}
               >
-                <div style={{ 
-                  transform: `scale(${zoom})`,
-                  transformOrigin: 'top left',
-                  width: '2478px',
-                  height: '500px'
-                }}>
-                  <svg 
-                    ref={svgRef}
-                    width="2478"
-                    height="500"
-                    className="border border-border rounded-lg bg-card"
-                  >
+                {(() => {
+                  const maxDistance = stations.length > 0 ? Math.max(...stations.map(s => (s.distance_km || s.position))) : 50;
+                  const svgHeight = Math.max(600, 80 + maxDistance * 7.56 + 100);
+                  return (
+                    <div style={{ 
+                      transform: `scale(${zoom})`,
+                      transformOrigin: 'top left',
+                      width: '2478px',
+                      height: `${svgHeight}px`
+                    }}>
+                      <svg 
+                        ref={svgRef}
+                        width="2478"
+                        height={svgHeight}
+                        className="border border-border rounded-lg bg-card"
+                      >
                   <rect width="100%" height="100%" fill="hsl(var(--card))" />
                   
                   {/* Сетка времени (4мм = 10 минут, 4мм ≈ 15.12px, 24 часа = 144 интервала) */}
@@ -745,7 +749,7 @@ const Index = () => {
                           x1={x}
                           y1="50"
                           x2={x}
-                          y2="480"
+                          y2={(stations.length > 0 ? 80 + Math.max(...stations.map(s => (s.distance_km || s.position))) * 7.56 + 50 : 550)}
                           stroke="#000000"
                           strokeWidth={isHourMark ? '2' : '1'}
                           strokeDasharray={isHalfHourMark ? '5,5' : '0'}
@@ -1007,8 +1011,10 @@ const Index = () => {
                   <text x="1300" y="495" textAnchor="middle" fill="hsl(var(--foreground))" fontSize="14" fontWeight="600">
                     Время (часы:минуты)
                   </text>
-                  </svg>
-                </div>
+                      </svg>
+                    </div>
+                  );
+                })()}
               </div>
             </Card>
           </TabsContent>
