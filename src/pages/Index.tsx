@@ -1098,11 +1098,13 @@ const Index = () => {
                           y={(y1 + y2) / 2 - 10}
                           textAnchor="middle"
                           fill={train.color}
-                          fontSize="14"
-                          fontWeight="bold"
+                          fontSize="11"
+                          fontFamily="'Courier New', monospace"
+                          fontWeight="600"
                           stroke="hsl(var(--card))"
                           strokeWidth="3"
                           paintOrder="stroke"
+                          transform={`rotate(${Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI)}, ${(x1 + x2) / 2}, ${(y1 + y2) / 2 - 10})`}
                         >
                           {train.number}
                         </text>
