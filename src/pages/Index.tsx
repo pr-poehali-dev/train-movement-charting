@@ -727,8 +727,9 @@ const Index = () => {
                   >
                   <rect width="100%" height="100%" fill="hsl(var(--card))" />
                   
-                  {/* Сетка времени (10мм = 10 минут, 1мм ≈ 3.78px, 10мм ≈ 37.8px) */}
+                  {/* Сетка времени (10мм = 10 минут, 24 часа = 144 интервала по 10 мин) */}
                   {Array.from({ length: 145 }, (_, i) => {
+                    if (i > 144) return null;
                     const x = 150 + i * 37.8;
                     const hour = Math.floor(i / 6);
                     const minute = (i % 6) * 10;
@@ -746,7 +747,7 @@ const Index = () => {
                           strokeWidth={isHourMark ? '2' : '1'}
                           strokeDasharray={isHalfHourMark ? '5,5' : '0'}
                         />
-                        {isHourMark && (
+                        {isHourMark && hour <= 24 && (
                           <text
                             x={x}
                             y="35"
@@ -773,29 +774,29 @@ const Index = () => {
                           <rect
                             x="0"
                             y={y - 15}
-                            width="145"
+                            width="150"
                             height="30"
                             fill="#FFFFFF"
                             stroke="#000000"
                             strokeWidth="1.5"
                           />
                           <line
-                            x1="145"
+                            x1="150"
                             y1={y}
-                            x2="5670"
+                            x2={150 + 144 * 37.8}
                             y2={y}
                             stroke="#000000"
                             strokeWidth="2"
                           />
                           <text
-                            x="5"
+                            x="8"
                             y={y + 5}
                             textAnchor="start"
                             fill="#000000"
-                            fontSize="11"
+                            fontSize="10"
                             fontWeight="600"
                           >
-                            {station.name.length > 18 ? station.name.substring(0, 18) + '...' : station.name}
+                            {station.name.length > 15 ? station.name.substring(0, 15) + '.' : station.name}
                           </text>
                         </g>
                       );
@@ -867,9 +868,14 @@ const Index = () => {
                     const arrStation = stations.find(s => s.id === train.arrival_station_id);
                     if (!depStation || !arrStation) return null;
                     
+                    if (train.departure_time >= 24 * 60 || train.arrival_time >= 24 * 60) return null;
+                    
                     // Координаты времени (37.8px = 10 минут)
                     const x1 = 150 + (train.departure_time * 60) * (37.8 / 10);
                     const x2 = 150 + (train.arrival_time * 60) * (37.8 / 10);
+                    
+                    const maxX = 150 + 144 * 37.8;
+                    if (x1 > maxX || x2 > maxX) return null;
                     
                     // Координаты расстояния (37.8px = 1км)
                     const y1 = 80 + depStation.position * 37.8;
