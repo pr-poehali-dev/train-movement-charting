@@ -771,32 +771,33 @@ const Index = () => {
                       
                       return (
                         <g key={station.id}>
-                          <rect
-                            x="0"
-                            y={y - 15}
-                            width="150"
-                            height="30"
-                            fill="#FFFFFF"
-                            stroke="#000000"
-                            strokeWidth="1.5"
-                          />
                           <line
-                            x1="150"
+                            x1="0"
                             y1={y}
                             x2={150 + 144 * 37.8}
                             y2={y}
                             stroke="#000000"
                             strokeWidth="2"
                           />
+                          <rect
+                            x="0"
+                            y="50"
+                            width="150"
+                            height={y - 50}
+                            fill="#FFFFFF"
+                            stroke="#000000"
+                            strokeWidth="1.5"
+                          />
                           <text
-                            x="8"
-                            y={y + 5}
-                            textAnchor="start"
+                            x="75"
+                            y={(y + 50) / 2}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
                             fill="#000000"
-                            fontSize="10"
+                            fontSize="11"
                             fontWeight="600"
                           >
-                            {station.name.length > 15 ? station.name.substring(0, 15) + '.' : station.name}
+                            {station.name}
                           </text>
                         </g>
                       );
@@ -1135,12 +1136,12 @@ const Index = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>Линия (опционально)</Label>
-                      <Select value={String(stationForm.line_id || '')} onValueChange={(value) => setStationForm({ ...stationForm, line_id: value ? parseInt(value) : undefined })}>
+                      <Select value={String(stationForm.line_id || '0')} onValueChange={(value) => setStationForm({ ...stationForm, line_id: value === '0' ? undefined : parseInt(value) })}>
                         <SelectTrigger>
                           <SelectValue placeholder="Без линии" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Без линии</SelectItem>
+                          <SelectItem value="0">Без линии</SelectItem>
                           {lines.map(l => (
                             <SelectItem key={l.id} value={String(l.id)}>{l.name}</SelectItem>
                           ))}
