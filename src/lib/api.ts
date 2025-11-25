@@ -56,131 +56,60 @@ export interface TrainStop {
   created_at?: string;
 }
 
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}?path=${path}`, options);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function createCRUD<T extends { id: number }>(path: string) {
+  return {
+    getAll: (params?: Record<string, string | number>): Promise<T[]> => {
+      const queryParams = params ? '&' + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString() : '';
+      return request<T[]>(`${path}${queryParams}`);
+    },
+    create: (data: Omit<T, 'id' | 'created_at'>): Promise<T> =>
+      request<T>(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    update: (data: T): Promise<T> =>
+      request<T>(path, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    delete: (id: number): Promise<void> =>
+      fetch(`${API_URL}?path=${path}&id=${id}`, { method: 'DELETE' }).then(() => {}),
+  };
+}
+
 export const api = {
-  lines: {
-    getAll: async (): Promise<Line[]> => {
-      const res = await fetch(`${API_URL}?path=lines`);
-      return res.json();
-    },
-    create: async (data: Omit<Line, 'id'>): Promise<Line> => {
-      const res = await fetch(`${API_URL}?path=lines`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    update: async (data: Line): Promise<Line> => {
-      const res = await fetch(`${API_URL}?path=lines`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    delete: async (id: number): Promise<void> => {
-      await fetch(`${API_URL}?path=lines&id=${id}`, { method: 'DELETE' });
-    },
-  },
-  
-  stations: {
-    getAll: async (): Promise<Station[]> => {
-      const res = await fetch(`${API_URL}?path=stations`);
-      return res.json();
-    },
-    create: async (data: Omit<Station, 'id'>): Promise<Station> => {
-      const res = await fetch(`${API_URL}?path=stations`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    update: async (data: Station): Promise<Station> => {
-      const res = await fetch(`${API_URL}?path=stations`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    delete: async (id: number): Promise<void> => {
-      await fetch(`${API_URL}?path=stations&id=${id}`, { method: 'DELETE' });
-    },
-  },
-  
+  lines: createCRUD<Line>('lines'),
+  stations: createCRUD<Station>('stations'),
   trains: {
-    getAll: async (scheduleId: number = 1): Promise<Train[]> => {
-      const res = await fetch(`${API_URL}?path=trains&schedule_id=${scheduleId}`);
-      return res.json();
-    },
-    create: async (data: Omit<Train, 'id' | 'created_at'>): Promise<Train> => {
-      const res = await fetch(`${API_URL}?path=trains`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    update: async (data: Train): Promise<Train> => {
-      const res = await fetch(`${API_URL}?path=trains`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    delete: async (id: number): Promise<void> => {
-      await fetch(`${API_URL}?path=trains&id=${id}`, { method: 'DELETE' });
-    },
+    ...createCRUD<Train>('trains'),
+    getAll: (scheduleId: number = 1): Promise<Train[]> => request<Train[]>(`trains&schedule_id=${scheduleId}`),
   },
-  
   legend: {
-    getAll: async (scheduleId: number = 1): Promise<LegendItem[]> => {
-      const res = await fetch(`${API_URL}?path=legend&schedule_id=${scheduleId}`);
-      return res.json();
-    },
-    update: async (data: LegendItem): Promise<LegendItem> => {
-      const res = await fetch(`${API_URL}?path=legend`, {
+    getAll: (scheduleId: number = 1): Promise<LegendItem[]> => request<LegendItem[]>(`legend&schedule_id=${scheduleId}`),
+    update: (data: LegendItem): Promise<LegendItem> =>
+      request<LegendItem>('legend', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      });
-      return res.json();
-    },
+      }),
   },
-  
   trainStops: {
+    ...createCRUD<TrainStop>('train_stops'),
     getAll: async (trainId?: number): Promise<TrainStop[]> => {
-      const url = trainId 
-        ? `${API_URL}?path=train_stops&train_id=${trainId}`
-        : `${API_URL}?path=train_stops`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        console.error('HTTP', res.status, ':', url);
+      try {
+        const params = trainId ? `&train_id=${trainId}` : '';
+        return await request<TrainStop[]>(`train_stops${params}`);
+      } catch {
         return [];
       }
-      const data = await res.json();
-      return Array.isArray(data) ? data : [];
-    },
-    create: async (data: Omit<TrainStop, 'id' | 'stop_duration' | 'created_at'>): Promise<TrainStop> => {
-      const res = await fetch(`${API_URL}?path=train_stops`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    update: async (data: TrainStop): Promise<TrainStop> => {
-      const res = await fetch(`${API_URL}?path=train_stops`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      return res.json();
-    },
-    delete: async (id: number): Promise<void> => {
-      await fetch(`${API_URL}?path=train_stops&id=${id}`, { method: 'DELETE' });
     },
   },
 };
