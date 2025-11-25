@@ -92,6 +92,31 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'body': json.dumps([dict(row) for row in items], default=json_serial),
                     'isBase64Encoded': False
                 }
+            
+            elif path == 'train_stops':
+                train_id = event.get('queryStringParameters', {}).get('train_id')
+                if train_id:
+                    cur.execute('''
+                        SELECT ts.*, s.name as station_name, s.distance_km, s.position
+                        FROM train_stops ts
+                        JOIN stations s ON ts.station_id = s.id
+                        WHERE ts.train_id = %s
+                        ORDER BY ts.arrival_time
+                    ''', (train_id,))
+                else:
+                    cur.execute('''
+                        SELECT ts.*, s.name as station_name, s.distance_km, s.position
+                        FROM train_stops ts
+                        JOIN stations s ON ts.station_id = s.id
+                        ORDER BY ts.train_id, ts.arrival_time
+                    ''')
+                stops = cur.fetchall()
+                return {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps([dict(row) for row in stops], default=json_serial),
+                    'isBase64Encoded': False
+                }
         
         elif method == 'POST':
             body_data = json.loads(event.get('body', '{}'))
@@ -146,6 +171,29 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 )
                 conn.commit()
                 train = cur.fetchone()
+                return {
+                    'statusCode': 201,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps(dict(train), default=json_serial),
+                    'isBase64Encoded': False
+                }
+            
+            elif path == 'train_stops':
+                train_id = body_data.get('train_id')
+                station_id = body_data.get('station_id')
+                arrival_time = body_data.get('arrival_time')
+                departure_time = body_data.get('departure_time')
+                
+                cur.execute(
+                    '''INSERT INTO train_stops (train_id, station_id, arrival_time, departure_time)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (train_id, station_id) 
+                    DO UPDATE SET arrival_time = EXCLUDED.arrival_time, departure_time = EXCLUDED.departure_time
+                    RETURNING *''',
+                    (train_id, station_id, arrival_time, departure_time)
+                )
+                conn.commit()
+                stop = cur.fetchone()
                 return {
                     'statusCode': 201,
                     'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
@@ -220,6 +268,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'body': json.dumps(dict(item)),
                     'isBase64Encoded': False
                 }
+            
+            elif path == 'train_stops':
+                stop_id = body_data.get('id')
+                cur.execute(
+                    '''UPDATE train_stops SET 
+                    arrival_time = %s, departure_time = %s 
+                    WHERE id = %s RETURNING *''',
+                    (body_data.get('arrival_time'), body_data.get('departure_time'), stop_id)
+                )
+                conn.commit()
+                stop = cur.fetchone()
+                return {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps(dict(stop), default=json_serial),
+                    'isBase64Encoded': False
+                }
         
         elif method == 'DELETE':
             item_id = event.get('queryStringParameters', {}).get('id')
@@ -286,6 +351,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'statusCode': 404,
                         'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
                         'body': json.dumps({'error': 'Line not found'}),
+                        'isBase64Encoded': False
+                    }
+            
+            elif path == 'train_stops':
+                cur.execute('DELETE FROM train_stops WHERE id = %s RETURNING id', (int(item_id),))
+                deleted = cur.fetchone()
+                conn.commit()
+                if deleted:
+                    return {
+                        'statusCode': 200,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'success': True, 'id': deleted['id']}),
+                        'isBase64Encoded': False
+                    }
+                else:
+                    return {
+                        'statusCode': 404,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'error': 'Stop not found'}),
                         'isBase64Encoded': False
                     }
         

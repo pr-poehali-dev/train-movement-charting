@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from '@/components/ui/use-toast';
 import { Switch } from '@/components/ui/switch';
 import Icon from '@/components/ui/icon';
-import { api, Line, Station, Train, LegendItem } from '@/lib/api';
+import { api, Line, Station, Train, LegendItem, TrainStop } from '@/lib/api';
 
 const Index = () => {
   const [isMetroMode, setIsMetroMode] = useState(false);
@@ -27,18 +27,28 @@ const Index = () => {
   const [stations, setStations] = useState<Station[]>([]);
   const [trains, setTrains] = useState<Train[]>([]);
   const [legendItems, setLegendItems] = useState<LegendItem[]>([]);
+  const [trainStops, setTrainStops] = useState<TrainStop[]>([]);
 
   const [trainDialogOpen, setTrainDialogOpen] = useState(false);
   const [stationDialogOpen, setStationDialogOpen] = useState(false);
   const [lineDialogOpen, setLineDialogOpen] = useState(false);
   const [legendDialogOpen, setLegendDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [stopsDialogOpen, setStopsDialogOpen] = useState(false);
   
   const [editingTrain, setEditingTrain] = useState<Train | null>(null);
   const [editingStation, setEditingStation] = useState<Station | null>(null);
   const [editingLine, setEditingLine] = useState<Line | null>(null);
   const [editingLegend, setEditingLegend] = useState<LegendItem | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ type: 'train' | 'station' | 'line', id: number } | null>(null);
+  const [selectedTrainForStops, setSelectedTrainForStops] = useState<Train | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'train' | 'station' | 'line' | 'stop', id: number } | null>(null);
+  const [stopForm, setStopForm] = useState({
+    station_id: 0,
+    arrival_hours: 0,
+    arrival_minutes: 0,
+    departure_hours: 0,
+    departure_minutes: 0,
+  });
 
   const [trainForm, setTrainForm] = useState({
     number: '',
@@ -76,16 +86,18 @@ const Index = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [linesData, stationsData, trainsData, legendData] = await Promise.all([
+      const [linesData, stationsData, trainsData, legendData, stopsData] = await Promise.all([
         api.lines.getAll(),
         api.stations.getAll(),
         api.trains.getAll(1),
         api.legend.getAll(1),
+        api.trainStops.getAll(),
       ]);
       setLines(linesData);
       setStations(stationsData);
       setTrains(trainsData);
       setLegendItems(legendData);
+      setTrainStops(stopsData);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast({ title: 'Ошибка загрузки', description: errorMessage, variant: 'destructive' });
@@ -192,6 +204,9 @@ const Index = () => {
       } else if (deleteTarget.type === 'line') {
         await api.lines.delete(deleteTarget.id);
         toast({ title: 'Линия удалена' });
+      } else if (deleteTarget.type === 'stop') {
+        await api.trainStops.delete(deleteTarget.id);
+        toast({ title: 'Остановка удалена' });
       }
       await loadData();
       setDeleteTarget(null);
@@ -199,6 +214,38 @@ const Index = () => {
     } catch (error) {
       toast({ title: 'Ошибка удаления', description: String(error), variant: 'destructive' });
     }
+  };
+
+  const saveTrainStop = async () => {
+    if (!selectedTrainForStops) return;
+    try {
+      const arrival_time = stopForm.arrival_hours * 60 + stopForm.arrival_minutes;
+      const departure_time = stopForm.departure_hours * 60 + stopForm.departure_minutes;
+      
+      await api.trainStops.create({
+        train_id: selectedTrainForStops.id,
+        station_id: stopForm.station_id,
+        arrival_time,
+        departure_time,
+      });
+      
+      toast({ title: 'Остановка добавлена' });
+      await loadData();
+      setStopForm({
+        station_id: 0,
+        arrival_hours: 0,
+        arrival_minutes: 0,
+        departure_hours: 0,
+        departure_minutes: 0,
+      });
+    } catch (error) {
+      toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
+    }
+  };
+
+  const openStopsDialog = (train: Train) => {
+    setSelectedTrainForStops(train);
+    setStopsDialogOpen(true);
   };
 
   const openEditTrain = (train: Train) => {
@@ -989,6 +1036,62 @@ const Index = () => {
                           {formatTime(train.arrival_time)}
                         </text>
                         
+                        {/* Остановочные пункты */}
+                        {trainStops
+                          .filter(stop => stop.train_id === train.id)
+                          .map(stop => {
+                            const stopStation = stations.find(s => s.id === stop.station_id);
+                            if (!stopStation) return null;
+                            
+                            const stopX1 = 150 + (stop.arrival_time * 60) * (15.12 / 10);
+                            const stopX2 = 150 + (stop.departure_time * 60) * (15.12 / 10);
+                            const stopY = 80 + (stopStation.distance_km || stopStation.position) * 7.56;
+                            
+                            return (
+                              <g key={`stop-${stop.id}`}>
+                                {/* Горизонтальная линия стоянки */}
+                                <line
+                                  x1={stopX1}
+                                  y1={stopY}
+                                  x2={stopX2}
+                                  y2={stopY}
+                                  stroke={train.color}
+                                  strokeWidth="4"
+                                />
+                                {/* Квадратная метка остановки */}
+                                <rect
+                                  x={stopX1 - 3}
+                                  y={stopY - 3}
+                                  width="6"
+                                  height="6"
+                                  fill={train.color}
+                                  stroke="#FFFFFF"
+                                  strokeWidth="1"
+                                />
+                                <rect
+                                  x={stopX2 - 3}
+                                  y={stopY - 3}
+                                  width="6"
+                                  height="6"
+                                  fill={train.color}
+                                  stroke="#FFFFFF"
+                                  strokeWidth="1"
+                                />
+                                {/* Время стоянки */}
+                                <text
+                                  x={(stopX1 + stopX2) / 2}
+                                  y={stopY + 15}
+                                  textAnchor="middle"
+                                  fill={train.color}
+                                  fontSize="9"
+                                  fontWeight="bold"
+                                >
+                                  {stop.stop_duration} мин
+                                </text>
+                              </g>
+                            );
+                          })}
+                        
                         {/* Номер поезда */}
                         <text
                           x={(x1 + x2) / 2}
@@ -1136,6 +1239,9 @@ const Index = () => {
                           </div>
                         </div>
                         <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openStopsDialog(train)}>
+                            <Icon name="MapPin" size={16} />
+                          </Button>
                           <Button variant="outline" size="sm" onClick={() => openEditTrain(train)}>
                             <Icon name="Pencil" size={16} />
                           </Button>
@@ -1424,6 +1530,119 @@ const Index = () => {
                 </svg>
               </div>
               <Button onClick={saveLegendItem} className="w-full">Сохранить</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={stopsDialogOpen} onOpenChange={setStopsDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Остановочные пункты - Поезд {selectedTrainForStops?.number}</DialogTitle>
+          </DialogHeader>
+          {selectedTrainForStops && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-3">
+                <h4 className="font-medium">Добавить остановку</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Станция</Label>
+                    <Select value={String(stopForm.station_id || '0')} onValueChange={(value) => setStopForm({ ...stopForm, station_id: parseInt(value) })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Выберите станцию" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stations
+                          .filter(s => s.id !== selectedTrainForStops.departure_station_id && s.id !== selectedTrainForStops.arrival_station_id)
+                          .map(s => (
+                            <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Время прибытия (ч:мм)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="23"
+                        placeholder="ЧЧ"
+                        value={stopForm.arrival_hours}
+                        onChange={(e) => setStopForm({ ...stopForm, arrival_hours: parseInt(e.target.value) || 0 })}
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        max="59"
+                        placeholder="ММ"
+                        value={stopForm.arrival_minutes}
+                        onChange={(e) => setStopForm({ ...stopForm, arrival_minutes: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Время отправления (ч:мм)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="23"
+                        placeholder="ЧЧ"
+                        value={stopForm.departure_hours}
+                        onChange={(e) => setStopForm({ ...stopForm, departure_hours: parseInt(e.target.value) || 0 })}
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        max="59"
+                        placeholder="ММ"
+                        value={stopForm.departure_minutes}
+                        onChange={(e) => setStopForm({ ...stopForm, departure_minutes: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <Button onClick={saveTrainStop} className="w-full">Добавить остановку</Button>
+              </div>
+
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-3">Текущие остановки</h4>
+                <div className="space-y-2">
+                  {trainStops
+                    .filter(stop => stop.train_id === selectedTrainForStops.id)
+                    .sort((a, b) => a.arrival_time - b.arrival_time)
+                    .map(stop => {
+                      const station = stations.find(s => s.id === stop.station_id);
+                      return (
+                        <div key={stop.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <div className="font-medium">{station?.name}</div>
+                            <div className="text-sm text-muted-foreground">
+                              Прибытие: {formatTime(stop.arrival_time)} • Отправление: {formatTime(stop.departure_time)} • Стоянка: {stop.stop_duration} мин
+                            </div>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              setDeleteTarget({ type: 'stop', id: stop.id });
+                              setDeleteDialogOpen(true);
+                            }}
+                          >
+                            <Icon name="Trash2" size={16} />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  {trainStops.filter(stop => stop.train_id === selectedTrainForStops.id).length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Icon name="MapPin" size={48} className="mx-auto mb-2 opacity-50" />
+                      <p>Нет остановок</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </DialogContent>

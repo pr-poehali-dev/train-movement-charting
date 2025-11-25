@@ -41,6 +41,19 @@ export interface LegendItem {
   created_at?: string;
 }
 
+export interface TrainStop {
+  id: number;
+  train_id: number;
+  station_id: number;
+  arrival_time: number;
+  departure_time: number;
+  stop_duration: number;
+  station_name?: string;
+  distance_km?: number;
+  position?: number;
+  created_at?: string;
+}
+
 export const api = {
   lines: {
     getAll: async (): Promise<Line[]> => {
@@ -132,6 +145,35 @@ export const api = {
         body: JSON.stringify(data),
       });
       return res.json();
+    },
+  },
+  
+  trainStops: {
+    getAll: async (trainId?: number): Promise<TrainStop[]> => {
+      const url = trainId 
+        ? `${API_URL}?path=train_stops&train_id=${trainId}`
+        : `${API_URL}?path=train_stops`;
+      const res = await fetch(url);
+      return res.json();
+    },
+    create: async (data: Omit<TrainStop, 'id' | 'stop_duration' | 'created_at'>): Promise<TrainStop> => {
+      const res = await fetch(`${API_URL}?path=train_stops`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    update: async (data: TrainStop): Promise<TrainStop> => {
+      const res = await fetch(`${API_URL}?path=train_stops`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    delete: async (id: number): Promise<void> => {
+      await fetch(`${API_URL}?path=train_stops&id=${id}`, { method: 'DELETE' });
     },
   },
 };
