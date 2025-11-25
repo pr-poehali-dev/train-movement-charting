@@ -765,9 +765,14 @@ const Index = () => {
                   
                   {/* Горизонтальные линии станций (10мм = 1км, 10мм ≈ 37.8px) */}
                   {stations
-                    .sort((a, b) => b.position - a.position)
-                    .map((station, i) => {
-                      const y = 80 + station.position * 37.8;
+                    .sort((a, b) => (b.distance_km || b.position) - (a.distance_km || a.position))
+                    .map((station, i, arr) => {
+                      const distance = station.distance_km || station.position;
+                      const y = 80 + distance * 37.8;
+                      
+                      const prevStation = i > 0 ? arr[i - 1] : null;
+                      const prevDistance = prevStation ? (prevStation.distance_km || prevStation.position) : 0;
+                      const distanceBetween = prevDistance - distance;
                       
                       return (
                         <g key={station.id}>
@@ -780,26 +785,30 @@ const Index = () => {
                             stroke="#000000"
                             strokeWidth="2"
                           />
-                          {/* Поле для расстояния */}
-                          <rect
-                            x="0"
-                            y={y - 15}
-                            width="100"
-                            height="30"
-                            fill="#FFFFFF"
-                            stroke="#000000"
-                            strokeWidth="1.5"
-                          />
-                          <text
-                            x="50"
-                            y={y + 5}
-                            textAnchor="middle"
-                            fill="#000000"
-                            fontSize="10"
-                            fontWeight="600"
-                          >
-                            {station.position}км
-                          </text>
+                          {/* Поле для расстояния между станциями */}
+                          {i > 0 && (
+                            <>
+                              <rect
+                                x="0"
+                                y={(y + 80 + prevDistance * 37.8) / 2 - 15}
+                                width="100"
+                                height="30"
+                                fill="#FFFFFF"
+                                stroke="#000000"
+                                strokeWidth="1.5"
+                              />
+                              <text
+                                x="50"
+                                y={(y + 80 + prevDistance * 37.8) / 2 + 5}
+                                textAnchor="middle"
+                                fill="#000000"
+                                fontSize="10"
+                                fontWeight="600"
+                              >
+                                {distanceBetween.toFixed(1)}
+                              </text>
+                            </>
+                          )}
                           {/* Поле для названия станции */}
                           <rect
                             x="100"
@@ -838,13 +847,13 @@ const Index = () => {
                     
                     const x1 = 300 + (t1.departure_time * 60) * (37.8 / 10);
                     const x2 = 300 + (t1.arrival_time * 60) * (37.8 / 10);
-                    const y1 = 80 + d1.position * 37.8;
-                    const y2 = 80 + a1.position * 37.8;
+                    const y1 = 80 + (d1.distance_km || d1.position) * 37.8;
+                    const y2 = 80 + (a1.distance_km || a1.position) * 37.8;
                     
                     const x3 = 300 + (t2.departure_time * 60) * (37.8 / 10);
                     const x4 = 300 + (t2.arrival_time * 60) * (37.8 / 10);
-                    const y3 = 80 + d2.position * 37.8;
-                    const y4 = 80 + a2.position * 37.8;
+                    const y3 = 80 + (d2.distance_km || d2.position) * 37.8;
+                    const y4 = 80 + (a2.distance_km || a2.position) * 37.8;
                     
                     const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
                     const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
@@ -900,8 +909,8 @@ const Index = () => {
                     if (x1 > maxX || x2 > maxX) return null;
                     
                     // Координаты расстояния (37.8px = 1км)
-                    const y1 = 80 + depStation.position * 37.8;
-                    const y2 = 80 + arrStation.position * 37.8;
+                    const y1 = 80 + (depStation.distance_km || depStation.position) * 37.8;
+                    const y2 = 80 + (arrStation.distance_km || arrStation.position) * 37.8;
                     
                     const legendItem = getLegendItemByType(train.type);
                     const lineStyle = legendItem?.line_style || 'solid';
