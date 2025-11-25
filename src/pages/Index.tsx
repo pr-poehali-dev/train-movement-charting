@@ -15,8 +15,13 @@ import { api, Line, Station, Train, LegendItem } from '@/lib/api';
 const Index = () => {
   const [isMetroMode, setIsMetroMode] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [loading, setLoading] = useState(true);
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [lines, setLines] = useState<Line[]>([]);
   const [stations, setStations] = useState<Station[]>([]);
@@ -256,6 +261,33 @@ const Index = () => {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - panX, y: e.clientY - panY });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setPanX(e.clientX - dragStart.x);
+    setPanY(e.clientY - dragStart.y);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom(Math.max(0.3, Math.min(3, zoom + delta)));
+  };
+
+  const resetView = () => {
+    setZoom(1);
+    setPanX(0);
+    setPanY(0);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -269,37 +301,37 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-2 md:gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 rounded-lg">
-              <Icon name={isMetroMode ? "TramFront" : "Train"} size={32} className="text-primary" />
+              <Icon name={isMetroMode ? "TramFront" : "Train"} size={24} className="text-primary md:w-8 md:h-8" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold">
+              <h1 className="text-xl md:text-3xl font-bold">
                 {isMetroMode ? 'График движения метрополитена' : 'График движения поездов'}
               </h1>
-              <p className="text-muted-foreground">Диспетчерская система управления</p>
+              <p className="text-muted-foreground text-xs md:text-base hidden sm:block">Диспетчерская система управления</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Icon name="Train" size={18} />
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="flex items-center gap-1 md:gap-2">
+              <Icon name="Train" size={16} className="md:w-[18px] md:h-[18px]" />
               <Switch checked={isMetroMode} onCheckedChange={setIsMetroMode} />
-              <Icon name="TramFront" size={18} />
+              <Icon name="TramFront" size={16} className="md:w-[18px] md:h-[18px]" />
             </div>
             
-            <Button variant="outline" onClick={exportToPDF} className="gap-2">
-              <Icon name="Download" size={20} />
-              Экспорт
+            <Button variant="outline" onClick={exportToPDF} className="gap-1 md:gap-2 h-8 md:h-10 px-2 md:px-4">
+              <Icon name="Download" size={16} className="md:w-5 md:h-5" />
+              <span className="hidden sm:inline">Экспорт</span>
             </Button>
             
             <Dialog open={trainDialogOpen} onOpenChange={setTrainDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2" onClick={() => setEditingTrain(null)}>
-                  <Icon name="Plus" size={20} />
-                  Добавить
+                <Button className="gap-1 md:gap-2 h-8 md:h-10 px-2 md:px-4" onClick={() => setEditingTrain(null)}>
+                  <Icon name="Plus" size={16} className="md:w-5 md:h-5" />
+                  <span className="hidden sm:inline">Добавить</span>
                 </Button>
               </DialogTrigger>
               <DialogContent>
@@ -428,50 +460,70 @@ const Index = () => {
         </div>
 
         <Tabs defaultValue="graph" className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="graph" className="gap-2">
-              <Icon name="LineChart" size={16} />
-              График
+          <TabsList className="grid w-full grid-cols-5 h-auto">
+            <TabsTrigger value="graph" className="gap-1 md:gap-2 text-xs md:text-sm py-2">
+              <Icon name="LineChart" size={14} className="md:w-4 md:h-4" />
+              <span className="hidden sm:inline">График</span>
             </TabsTrigger>
-            <TabsTrigger value="trains" className="gap-2">
-              <Icon name={isMetroMode ? "TramFront" : "Train"} size={16} />
-              {isMetroMode ? 'Составы' : 'Поезда'} ({trains.length})
+            <TabsTrigger value="trains" className="gap-1 md:gap-2 text-xs md:text-sm py-2">
+              <Icon name={isMetroMode ? "TramFront" : "Train"} size={14} className="md:w-4 md:h-4" />
+              <span className="hidden sm:inline">{isMetroMode ? 'Составы' : 'Поезда'}</span>
+              <span className="sm:hidden">({trains.length})</span>
             </TabsTrigger>
-            <TabsTrigger value="stations" className="gap-2">
-              <Icon name="MapPin" size={16} />
-              Станции ({stations.length})
+            <TabsTrigger value="stations" className="gap-1 md:gap-2 text-xs md:text-sm py-2">
+              <Icon name="MapPin" size={14} className="md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Станции</span>
+              <span className="sm:hidden">({stations.length})</span>
             </TabsTrigger>
-            <TabsTrigger value="lines" className="gap-2">
-              <Icon name="Route" size={16} />
-              Линии ({lines.length})
+            <TabsTrigger value="lines" className="gap-1 md:gap-2 text-xs md:text-sm py-2">
+              <Icon name="Route" size={14} className="md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Линии</span>
+              <span className="sm:hidden">({lines.length})</span>
             </TabsTrigger>
-            <TabsTrigger value="legend" className="gap-2">
-              <Icon name="Info" size={16} />
-              Легенда
+            <TabsTrigger value="legend" className="gap-1 md:gap-2 text-xs md:text-sm py-2">
+              <Icon name="Info" size={14} className="md:w-4 md:h-4" />
+              <span className="hidden sm:inline">Легенда</span>
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="graph" className="mt-6">
-            <Card className="p-6">
-              <div className="flex items-center gap-4 mb-4">
-                <Button variant="outline" size="sm" onClick={() => setZoom(Math.max(0.5, zoom - 0.1))}>
-                  <Icon name="ZoomOut" size={16} />
+          <TabsContent value="graph" className="mt-4 md:mt-6">
+            <Card className="p-3 md:p-6">
+              <div className="flex items-center gap-2 md:gap-4 mb-3 md:mb-4 flex-wrap">
+                <Button variant="outline" size="sm" onClick={() => setZoom(Math.max(0.3, zoom - 0.1))}>
+                  <Icon name="ZoomOut" size={14} className="md:w-4 md:h-4" />
                 </Button>
-                <span className="text-sm font-medium">{Math.round(zoom * 100)}%</span>
-                <Button variant="outline" size="sm" onClick={() => setZoom(Math.min(2, zoom + 0.1))}>
-                  <Icon name="ZoomIn" size={16} />
+                <span className="text-xs md:text-sm font-medium min-w-[60px] text-center">{Math.round(zoom * 100)}%</span>
+                <Button variant="outline" size="sm" onClick={() => setZoom(Math.min(3, zoom + 0.1))}>
+                  <Icon name="ZoomIn" size={14} className="md:w-4 md:h-4" />
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setZoom(1)}>
-                  <Icon name="Minimize2" size={16} />
+                <Button variant="outline" size="sm" onClick={resetView}>
+                  <Icon name="Minimize2" size={14} className="md:w-4 md:h-4" />
                 </Button>
+                <span className="text-xs text-muted-foreground hidden md:inline">Прокрутка: колесо мыши • Перемещение: перетаскивание</span>
+                <span className="text-xs text-muted-foreground md:hidden">Жесты: зум и прокрутка</span>
               </div>
               
-              <div className="relative overflow-auto" style={{ height: '700px' }}>
+              <div 
+                ref={containerRef}
+                className="relative overflow-auto touch-pan-x touch-pan-y" 
+                style={{ height: '400px' }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onWheel={handleWheel}
+              >
                 <svg 
                   ref={svgRef}
                   width={2400 * zoom}
-                  height={700}
+                  height={700 * zoom}
                   className="border border-border rounded-lg bg-card"
+                  style={{ 
+                    transform: `translate(${panX}px, ${panY}px)`,
+                    cursor: isDragging ? 'grabbing' : 'grab',
+                    minWidth: '100%',
+                    minHeight: '100%'
+                  }}
                 >
                   <defs>
                     <pattern id="grid-10min" width="16" height="2" patternUnits="userSpaceOnUse">
