@@ -233,16 +233,28 @@ const Index = () => {
   const exportToPDF = () => {
     if (!svgRef.current) return;
     
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
+    const svgClone = svgRef.current.cloneNode(true) as SVGSVGElement;
+    const rects = svgClone.querySelectorAll('rect[fill="hsl(var(--card))"]');
+    rects.forEach(rect => rect.setAttribute('fill', '#FFFFFF'));
+    
+    const svgData = new XMLSerializer().serializeToString(svgClone);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const img = new Image();
     
-    canvas.width = 1920;
-    canvas.height = 1080;
+    const pxPerMm = 3.7795275591;
+    const svgWidth = parseFloat(svgClone.getAttribute('width') || '5670');
+    const svgHeight = parseFloat(svgClone.getAttribute('height') || '700');
+    
+    canvas.width = svgWidth;
+    canvas.height = svgHeight;
     
     img.onload = () => {
-      ctx?.drawImage(img, 0, 0);
+      if (ctx) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+      }
       const pdfData = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = `график-движения-${new Date().toISOString().split('T')[0]}.png`;
@@ -704,29 +716,20 @@ const Index = () => {
                 <div style={{ 
                   transform: `scale(${zoom})`,
                   transformOrigin: 'top left',
-                  width: '2400px',
+                  width: '5670px',
                   height: '700px'
                 }}>
                   <svg 
                     ref={svgRef}
-                    width="2400"
+                    width="5670"
                     height="700"
                     className="border border-border rounded-lg bg-card"
                   >
-                  <defs>
-                    <pattern id="grid-10min" width="16" height="2" patternUnits="userSpaceOnUse">
-                      <path d="M 0 0 L 0 2" fill="none" stroke="hsl(var(--muted))" strokeWidth="0.3" />
-                    </pattern>
-                    <pattern id="grid-30min" width="48" height="2" patternUnits="userSpaceOnUse">
-                      <path d="M 0 0 L 0 2" fill="none" stroke="hsl(var(--muted))" strokeWidth="0.5" strokeDasharray="3,3" />
-                    </pattern>
-                  </defs>
-                  
                   <rect width="100%" height="100%" fill="hsl(var(--card))" />
                   
-                  {/* Сетка времени */}
+                  {/* Сетка времени (10мм = 10 минут, 1мм ≈ 3.78px, 10мм ≈ 37.8px) */}
                   {Array.from({ length: 145 }, (_, i) => {
-                    const x = 80 + i * 16;
+                    const x = 150 + i * 37.8;
                     const hour = Math.floor(i / 6);
                     const minute = (i % 6) * 10;
                     const isHourMark = minute === 0;
@@ -736,65 +739,62 @@ const Index = () => {
                       <g key={`time-${i}`}>
                         <line
                           x1={x}
-                          y1="40"
+                          y1="50"
                           x2={x}
-                          y2="660"
-                          stroke={isHourMark ? 'hsl(var(--border))' : 'hsl(var(--muted))'}
-                          strokeWidth={isHourMark ? '1.5' : '0.5'}
-                          strokeDasharray={isHalfHourMark ? '4,4' : '0'}
+                          y2="680"
+                          stroke="#000000"
+                          strokeWidth={isHourMark ? '2' : '1'}
                         />
                         {isHourMark && (
                           <text
                             x={x}
-                            y="30"
+                            y="35"
                             textAnchor="middle"
-                            fill="hsl(var(--foreground))"
-                            fontSize="12"
-                            fontWeight="bold"
+                            fill="#000000"
+                            fontSize="14"
+                            fontWeight="600"
                           >
-                            {hour}:00
+                            {hour}
                           </text>
                         )}
                       </g>
                     );
                   })}
                   
-                  {/* Горизонтальные линии станций (2мм = 1км, расстояние = position * 2мм в пикселях ~8px) */}
+                  {/* Горизонтальные линии станций (10мм = 1км, 10мм ≈ 37.8px) */}
                   {stations
                     .sort((a, b) => b.position - a.position)
                     .map((station, i) => {
-                      const y = 80 + station.position * 8;
+                      const y = 80 + station.position * 37.8;
                       
                       return (
                         <g key={station.id}>
-                          <line
-                            x1="80"
-                            y1={y}
-                            x2="2400"
-                            y2={y}
-                            stroke={station.line_color || 'hsl(var(--border))'}
+                          <rect
+                            x="0"
+                            y={y - 15}
+                            width="140"
+                            height="30"
+                            fill="#FFFFFF"
+                            stroke="#000000"
                             strokeWidth="1.5"
                           />
+                          <line
+                            x1="140"
+                            y1={y}
+                            x2="5670"
+                            y2={y}
+                            stroke="#000000"
+                            strokeWidth="2"
+                          />
                           <text
-                            x="10"
-                            y={y + 4}
-                            fill="hsl(var(--foreground))"
+                            x="70"
+                            y={y + 5}
+                            textAnchor="middle"
+                            fill="#000000"
                             fontSize="12"
                             fontWeight="600"
                           >
                             {station.name}
-                            {isMetroMode && station.line_name && (
-                              <tspan fill={station.line_color} fontSize="10"> ({station.line_name})</tspan>
-                            )}
-                          </text>
-                          <text
-                            x="60"
-                            y={y + 4}
-                            textAnchor="end"
-                            fill="hsl(var(--muted-foreground))"
-                            fontSize="10"
-                          >
-                            {station.position}км
                           </text>
                         </g>
                       );
@@ -812,15 +812,15 @@ const Index = () => {
                     
                     if (!d1 || !a1 || !d2 || !a2) return null;
                     
-                    const x1 = 80 + (t1.departure_time * 60) * (16 / 10);
-                    const x2 = 80 + (t1.arrival_time * 60) * (16 / 10);
-                    const y1 = 80 + d1.position * 8;
-                    const y2 = 80 + a1.position * 8;
+                    const x1 = 150 + (t1.departure_time * 60) * (37.8 / 10);
+                    const x2 = 150 + (t1.arrival_time * 60) * (37.8 / 10);
+                    const y1 = 80 + d1.position * 37.8;
+                    const y2 = 80 + a1.position * 37.8;
                     
-                    const x3 = 80 + (t2.departure_time * 60) * (16 / 10);
-                    const x4 = 80 + (t2.arrival_time * 60) * (16 / 10);
-                    const y3 = 80 + d2.position * 8;
-                    const y4 = 80 + a2.position * 8;
+                    const x3 = 150 + (t2.departure_time * 60) * (37.8 / 10);
+                    const x4 = 150 + (t2.arrival_time * 60) * (37.8 / 10);
+                    const y3 = 80 + d2.position * 37.8;
+                    const y4 = 80 + a2.position * 37.8;
                     
                     const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
                     const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
@@ -866,13 +866,13 @@ const Index = () => {
                     const arrStation = stations.find(s => s.id === train.arrival_station_id);
                     if (!depStation || !arrStation) return null;
                     
-                    // Координаты времени (16px = 10 минут)
-                    const x1 = 80 + (train.departure_time * 60) * (16 / 10);
-                    const x2 = 80 + (train.arrival_time * 60) * (16 / 10);
+                    // Координаты времени (37.8px = 10 минут)
+                    const x1 = 150 + (train.departure_time * 60) * (37.8 / 10);
+                    const x2 = 150 + (train.arrival_time * 60) * (37.8 / 10);
                     
-                    // Координаты расстояния (8px = 1км)
-                    const y1 = 80 + depStation.position * 8;
-                    const y2 = 80 + arrStation.position * 8;
+                    // Координаты расстояния (37.8px = 1км)
+                    const y1 = 80 + depStation.position * 37.8;
+                    const y2 = 80 + arrStation.position * 37.8;
                     
                     const legendItem = getLegendItemByType(train.type);
                     const lineStyle = legendItem?.line_style || 'solid';
