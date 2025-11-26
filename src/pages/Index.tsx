@@ -869,7 +869,8 @@ const Index = () => {
                       <Label className="text-blue-900 dark:text-blue-100">Автоматический расчёт маршрута</Label>
                     </div>
                     <p className="text-xs text-blue-800 dark:text-blue-200">
-                      Время прибытия = время в пути + стоянки на всех промежуточных станциях
+                      Время прибытия = время в пути + стоянки на всех промежуточных станциях<br/>
+                      Если скорость не указана, она будет рассчитана автоматически из существующих данных
                     </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
@@ -923,7 +924,31 @@ const Index = () => {
                         });
                         
                         const totalDistance = Math.abs(arrPos - depPos);
-                        const totalTravelTime = Math.round((totalDistance / trainForm.average_speed) * 60);
+                        let speedToUse = trainForm.average_speed;
+                        let speedMessage = '';
+                        
+                        if (!speedToUse || speedToUse <= 0) {
+                          if (editingTrain) {
+                            const existingStops = trainStops.filter(s => s.train_id === editingTrain.id);
+                            const totalStopDuration = existingStops.reduce((sum, s) => sum + s.stop_duration, 0);
+                            const totalTime = Math.abs(trainForm.arrival_time - trainForm.departure_time);
+                            const movingTime = totalTime - totalStopDuration;
+                            
+                            if (movingTime > 0 && totalDistance > 0) {
+                              speedToUse = Math.round((totalDistance / (movingTime / 60)) * 10) / 10;
+                              speedMessage = ` (автоматически рассчитана: ${speedToUse} км/ч)`;
+                              setTrainForm({ ...trainForm, average_speed: speedToUse });
+                            } else {
+                              speedToUse = 60;
+                              speedMessage = ' (использована скорость по умолчанию: 60 км/ч)';
+                            }
+                          } else {
+                            speedToUse = 60;
+                            speedMessage = ' (использована скорость по умолчанию: 60 км/ч)';
+                          }
+                        }
+                        
+                        const totalTravelTime = Math.round((totalDistance / speedToUse) * 60);
                         const totalStopTime = intermediateStations.length * trainForm.default_stop_duration;
                         
                         const calculatedArrivalTime = trainForm.departure_time + totalTravelTime + totalStopTime;
@@ -935,7 +960,7 @@ const Index = () => {
                         
                         toast({ 
                           title: "Расчёт выполнен", 
-                          description: `Расстояние: ${totalDistance.toFixed(1)} км, время в пути: ${Math.floor(totalTravelTime / 60)}ч ${totalTravelTime % 60}м, остановки: ${intermediateStations.length} × ${trainForm.default_stop_duration}м = ${totalStopTime}м` 
+                          description: `Расстояние: ${totalDistance.toFixed(1)} км${speedMessage}, время в пути: ${Math.floor(totalTravelTime / 60)}ч ${totalTravelTime % 60}м, остановки: ${intermediateStations.length} × ${trainForm.default_stop_duration}м = ${totalStopTime}м` 
                         });
                       }}
                     >
@@ -2143,8 +2168,31 @@ const Index = () => {
                       
                       if (isReverse) intermediateStations.reverse();
                       
-                      const avgSpeed = 60;
-                      const stopDuration = 2;
+                      let avgSpeed = 60;
+                      let speedMessage = '';
+                      
+                      const existingStops = currentStops;
+                      if (existingStops.length > 0) {
+                        const totalStopDuration = existingStops.reduce((sum, s) => sum + s.stop_duration, 0);
+                        const totalTime = Math.abs(selectedTrainForStops.arrival_time - selectedTrainForStops.departure_time);
+                        const movingTime = totalTime - totalStopDuration;
+                        const totalDistance = Math.abs(arrPos - depPos);
+                        
+                        if (movingTime > 0 && totalDistance > 0) {
+                          avgSpeed = Math.round((totalDistance / (movingTime / 60)) * 10) / 10;
+                          speedMessage = ` (автоматически рассчитана: ${avgSpeed} км/ч)`;
+                        } else {
+                          speedMessage = ' (по умолчанию: 60 км/ч)';
+                        }
+                      } else {
+                        speedMessage = ' (по умолчанию: 60 км/ч)';
+                      }
+                      
+                      const avgStopDuration = existingStops.length > 0 
+                        ? Math.round(existingStops.reduce((sum, s) => sum + s.stop_duration, 0) / existingStops.length)
+                        : 2;
+                      
+                      const stopDuration = avgStopDuration;
                       let currentTime = selectedTrainForStops.departure_time;
                       let lastPos = depPos;
                       
@@ -2171,7 +2219,7 @@ const Index = () => {
                       await loadData();
                       toast({ 
                         title: 'Остановки пересчитаны', 
-                        description: `Создано ${intermediateStations.length} остановок (60 км/ч, 2 мин стоянка)` 
+                        description: `Создано ${intermediateStations.length} остановок${speedMessage}, стоянка: ${stopDuration} мин` 
                       });
                     }}
                   >
