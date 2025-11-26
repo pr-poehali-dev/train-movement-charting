@@ -339,10 +339,17 @@ const Index = () => {
     if (!depStation || !arrStation) return 0;
     
     const distance = Math.abs(arrStation.distance_km - depStation.distance_km);
-    const timeMinutes = Math.abs(train.arrival_time - train.departure_time);
-    const timeHours = timeMinutes / 60;
+    const totalTimeMinutes = Math.abs(train.arrival_time - train.departure_time);
     
-    return timeHours > 0 ? distance / timeHours : 0;
+    // Вычитаем время всех остановок
+    const stops = trainStops.filter(stop => stop.train_id === train.id);
+    const totalStopTime = stops.reduce((sum, stop) => sum + stop.stop_duration, 0);
+    
+    // Время в движении = общее время - время остановок
+    const movingTimeMinutes = totalTimeMinutes - totalStopTime;
+    const movingTimeHours = movingTimeMinutes / 60;
+    
+    return movingTimeHours > 0 ? distance / movingTimeHours : 0;
   };
 
   const checkIntersection = (t1: Train, t2: Train) => {
@@ -1127,16 +1134,7 @@ const Index = () => {
                     
                     if (train.departure_time >= 24 * 60 || train.arrival_time >= 24 * 60) return null;
                     
-                    // Координаты времени (15.12px = 10 минут, время уже в минутах)
-                    const x1 = 150 + train.departure_time * (15.12 / 10);
-                    const x2 = 150 + train.arrival_time * (15.12 / 10);
-                    
                     const maxX = 150 + 144 * 15.12;
-                    if (x1 > maxX || x2 > maxX) return null;
-                    
-                    // Координаты расстояния (7.56px = 1км)
-                    const y1 = 80 + (depStation.distance_km || depStation.position) * 7.56;
-                    const y2 = 80 + (arrStation.distance_km || arrStation.position) * 7.56;
                     
                     const lineStyle = train.line_style || 'solid';
                     const lineWidth = train.line_width || 2.5;
@@ -1145,127 +1143,150 @@ const Index = () => {
                       lineStyle === 'dotted' ? '2,3' : 
                       lineStyle === 'dash-dot' ? '10,3,2,3' : '0';
                     
+                    // Собираем все точки маршрута с остановками
+                    const stops = trainStops
+                      .filter(stop => stop.train_id === train.id)
+                      .sort((a, b) => a.arrival_time - b.arrival_time);
+                    
+                    // Строим массив точек: старт -> остановки -> финиш
+                    const points: Array<{x: number, y: number, time: number, stationId: number, isStop?: boolean, stopDuration?: number}> = [];
+                    
+                    // Начальная точка
+                    const startX = 150 + train.departure_time * (15.12 / 10);
+                    const startY = 80 + (depStation.distance_km || depStation.position) * 7.56;
+                    points.push({ x: startX, y: startY, time: train.departure_time, stationId: train.departure_station_id });
+                    
+                    // Добавляем остановки
+                    stops.forEach(stop => {
+                      const stopStation = stations.find(s => s.id === stop.station_id);
+                      if (!stopStation) return;
+                      
+                      const stopY = 80 + (stopStation.distance_km || stopStation.position) * 7.56;
+                      const stopX1 = 150 + stop.arrival_time * (15.12 / 10);
+                      const stopX2 = 150 + stop.departure_time * (15.12 / 10);
+                      
+                      // Точка прибытия на остановку
+                      points.push({ 
+                        x: stopX1, 
+                        y: stopY, 
+                        time: stop.arrival_time, 
+                        stationId: stop.station_id,
+                        isStop: true 
+                      });
+                      
+                      // Точка отправления с остановки (горизонтальная линия)
+                      points.push({ 
+                        x: stopX2, 
+                        y: stopY, 
+                        time: stop.departure_time, 
+                        stationId: stop.station_id,
+                        isStop: true,
+                        stopDuration: stop.stop_duration
+                      });
+                    });
+                    
+                    // Конечная точка
+                    const endX = 150 + train.arrival_time * (15.12 / 10);
+                    const endY = 80 + (arrStation.distance_km || arrStation.position) * 7.56;
+                    points.push({ x: endX, y: endY, time: train.arrival_time, stationId: train.arrival_station_id });
+                    
+                    if (points[0].x > maxX) return null;
+                    
+                    // Создаем path для polyline
+                    const pathPoints = points.map(p => `${p.x},${p.y}`).join(' ');
+                    
                     return (
                       <g key={train.id}>
                         {lineStyle === 'double' ? (
                           <>
-                            <line
-                              x1={x1}
-                              y1={y1 - lineWidth * 0.4}
-                              x2={x2}
-                              y2={y2 - lineWidth * 0.4}
+                            <polyline
+                              points={pathPoints}
+                              fill="none"
                               stroke={train.color}
                               strokeWidth={lineWidth * 0.6}
+                              strokeLinejoin="miter"
                               className="transition-all duration-300 cursor-pointer"
                             />
-                            <line
-                              x1={x1}
-                              y1={y1 + lineWidth * 0.4}
-                              x2={x2}
-                              y2={y2 + lineWidth * 0.4}
+                            <polyline
+                              points={points.map(p => `${p.x},${p.y + lineWidth * 0.8}`).join(' ')}
+                              fill="none"
                               stroke={train.color}
                               strokeWidth={lineWidth * 0.6}
+                              strokeLinejoin="miter"
                               className="transition-all duration-300 cursor-pointer"
                             />
                           </>
                         ) : (
-                          <line
-                            x1={x1}
-                            y1={y1}
-                            x2={x2}
-                            y2={y2}
+                          <polyline
+                            points={pathPoints}
+                            fill="none"
                             stroke={train.color}
                             strokeWidth={lineWidth}
                             strokeDasharray={strokeDasharray}
+                            strokeLinejoin="miter"
                             className="transition-all duration-300 cursor-pointer"
                           />
                         )}
                         
-                        {/* Метки времени на точках отправления и прибытия */}
-                        <circle cx={x1} cy={y1} r="4" fill={train.color} />
-                        <text
-                          x={x1}
-                          y={y1 - 8}
-                          textAnchor="middle"
-                          fill="hsl(var(--foreground))"
-                          fontSize="11"
-                          fontWeight="bold"
-                        >
-                          {formatTime(train.departure_time)}
-                        </text>
-                        
-                        <circle cx={x2} cy={y2} r="4" fill={train.color} />
-                        <text
-                          x={x2}
-                          y={y2 - 8}
-                          textAnchor="middle"
-                          fill="hsl(var(--foreground))"
-                          fontSize="11"
-                          fontWeight="bold"
-                        >
-                          {formatTime(train.arrival_time)}
-                        </text>
-                        
-                        {/* Остановочные пункты */}
-                        {trainStops
-                          .filter(stop => stop.train_id === train.id)
-                          .map(stop => {
-                            const stopStation = stations.find(s => s.id === stop.station_id);
-                            if (!stopStation) return null;
-                            
-                            const stopX1 = 150 + stop.arrival_time * (15.12 / 10);
-                            const stopX2 = 150 + stop.departure_time * (15.12 / 10);
-                            const stopY = 80 + (stopStation.distance_km || stopStation.position) * 7.56;
-                            
-                            return (
-                              <g key={`stop-${stop.id}`}>
-                                {/* Горизонтальная линия стоянки */}
-                                <line
-                                  x1={stopX1}
-                                  y1={stopY}
-                                  x2={stopX2}
-                                  y2={stopY}
-                                  stroke={train.color}
-                                  strokeWidth="4"
-                                />
-                                {/* Квадратная метка остановки */}
+                        {/* Метки на всех точках */}
+                        {points.map((point, idx) => {
+                          const isFirst = idx === 0;
+                          const isLast = idx === points.length - 1;
+                          const isStopStart = point.isStop && points[idx + 1]?.y === point.y;
+                          const isStopEnd = point.isStop && points[idx - 1]?.y === point.y;
+                          
+                          return (
+                            <g key={`point-${idx}`}>
+                              {/* Круги на старте и финише, квадраты на остановках */}
+                              {isFirst || isLast ? (
+                                <circle cx={point.x} cy={point.y} r="4" fill={train.color} />
+                              ) : point.isStop ? (
                                 <rect
-                                  x={stopX1 - 3}
-                                  y={stopY - 3}
+                                  x={point.x - 3}
+                                  y={point.y - 3}
                                   width="6"
                                   height="6"
                                   fill={train.color}
                                   stroke="#FFFFFF"
                                   strokeWidth="1"
                                 />
-                                <rect
-                                  x={stopX2 - 3}
-                                  y={stopY - 3}
-                                  width="6"
-                                  height="6"
-                                  fill={train.color}
-                                  stroke="#FFFFFF"
-                                  strokeWidth="1"
-                                />
-                                {/* Время стоянки */}
+                              ) : null}
+                              
+                              {/* Время на старте и финише */}
+                              {(isFirst || isLast) && (
                                 <text
-                                  x={(stopX1 + stopX2) / 2}
-                                  y={stopY + 15}
+                                  x={point.x}
+                                  y={point.y - 8}
+                                  textAnchor="middle"
+                                  fill="hsl(var(--foreground))"
+                                  fontSize="11"
+                                  fontWeight="bold"
+                                >
+                                  {formatTime(point.time)}
+                                </text>
+                              )}
+                              
+                              {/* Длительность остановки */}
+                              {isStopEnd && point.stopDuration && (
+                                <text
+                                  x={(points[idx - 1].x + point.x) / 2}
+                                  y={point.y + 15}
                                   textAnchor="middle"
                                   fill={train.color}
                                   fontSize="9"
                                   fontWeight="bold"
                                 >
-                                  {stop.stop_duration} мин
+                                  {point.stopDuration} мин
                                 </text>
-                              </g>
-                            );
-                          })}
+                              )}
+                            </g>
+                          );
+                        })}
                         
                         {/* Номер поезда */}
                         <text
-                          x={(x1 + x2) / 2}
-                          y={(y1 + y2) / 2 - 10}
+                          x={(startX + endX) / 2}
+                          y={(startY + endY) / 2 - 10}
                           textAnchor="middle"
                           fill={train.color}
                           fontSize="11"
@@ -1274,7 +1295,7 @@ const Index = () => {
                           stroke="hsl(var(--card))"
                           strokeWidth="3"
                           paintOrder="stroke"
-                          transform={`rotate(${Math.atan2(y2 - y1, x2 - x1) * (180 / Math.PI)}, ${(x1 + x2) / 2}, ${(y1 + y2) / 2 - 10})`}
+                          transform={`rotate(${Math.atan2(endY - startY, endX - startX) * (180 / Math.PI)}, ${(startX + endX) / 2}, ${(startY + endY) / 2 - 10})`}
                         >
                           {train.number}
                         </text>
@@ -1311,6 +1332,11 @@ const Index = () => {
                     const arrStation = stations.find(s => s.id === train.arrival_station_id);
                     const distance = depStation && arrStation ? Math.abs(arrStation.distance_km - depStation.distance_km) : 0;
                     
+                    const stops = trainStops.filter(stop => stop.train_id === train.id);
+                    const totalStopTime = stops.reduce((sum, stop) => sum + stop.stop_duration, 0);
+                    const totalTime = Math.abs(train.arrival_time - train.departure_time);
+                    const movingTime = totalTime - totalStopTime;
+                    
                     return (
                       <div key={train.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-3">
@@ -1320,11 +1346,19 @@ const Index = () => {
                             <div className="text-xs text-muted-foreground">
                               {depStation?.name} → {arrStation?.name}
                             </div>
+                            {totalStopTime > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                {stops.length} {stops.length === 1 ? 'остановка' : 'остановки'} • {totalStopTime} мин стоянки
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="font-bold text-lg">{speed.toFixed(1)} км/ч</div>
                           <div className="text-xs text-muted-foreground">{distance.toFixed(1)} км</div>
+                          <div className="text-xs text-muted-foreground">
+                            {movingTime} мин в движении
+                          </div>
                         </div>
                       </div>
                     );
@@ -1631,11 +1665,19 @@ const Index = () => {
                   </div>
                 ))}
                 
-                <div className="flex items-center gap-4 mt-6 pt-4 border-t">
-                  <svg width="20" height="20">
-                    <circle cx="10" cy="10" r="5" fill="#0EA5E9" />
-                  </svg>
-                  <span>Точка отправления/прибытия</span>
+                <div className="space-y-3 mt-6 pt-4 border-t">
+                  <div className="flex items-center gap-4">
+                    <svg width="20" height="20">
+                      <circle cx="10" cy="10" r="5" fill="#0EA5E9" />
+                    </svg>
+                    <span>Точка отправления/прибытия</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <svg width="20" height="20">
+                      <rect x="4" y="4" width="12" height="12" fill="#0EA5E9" stroke="#FFFFFF" strokeWidth="1.5" />
+                    </svg>
+                    <span>Остановочный пункт</span>
+                  </div>
                 </div>
               </div>
             </Card>
