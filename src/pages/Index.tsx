@@ -1196,7 +1196,7 @@ const Index = () => {
                     const maxX = 150 + 144 * 15.12;
                     
                     const lineStyle = train.line_style || 'solid';
-                    const lineWidth = train.line_width || 2.5;
+                    const lineWidth = train.line_width || 1.5;
                     const strokeDasharray = 
                       lineStyle === 'dashed' ? '6,4' : 
                       lineStyle === 'dotted' ? '2,3' : 
