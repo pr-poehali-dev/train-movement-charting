@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from '@/components/ui/use-toast';
 import { Switch } from '@/components/ui/switch';
 import Icon from '@/components/ui/icon';
-import { api, Line, Station, Train, LegendItem, TrainStop } from '@/lib/api';
+import { api, Line, Station, Train, LegendItem, TrainStop, TrackSegment } from '@/lib/api';
 
 const Index = () => {
   const [isMetroMode, setIsMetroMode] = useState(false);
@@ -28,6 +28,7 @@ const Index = () => {
   const [trains, setTrains] = useState<Train[]>([]);
   const [legendItems, setLegendItems] = useState<LegendItem[]>([]);
   const [trainStops, setTrainStops] = useState<TrainStop[]>([]);
+  const [trackSegments, setTrackSegments] = useState<TrackSegment[]>([]);
 
   const [trainDialogOpen, setTrainDialogOpen] = useState(false);
   const [stationDialogOpen, setStationDialogOpen] = useState(false);
@@ -93,18 +94,20 @@ const Index = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [linesData, stationsData, trainsData, legendData, stopsData] = await Promise.all([
+      const [linesData, stationsData, trainsData, legendData, stopsData, segmentsData] = await Promise.all([
         api.lines.getAll(),
         api.stations.getAll(),
         api.trains.getAll(1),
         api.legend.getAll(1),
         api.trainStops.getAll(),
+        api.trackSegments.getAll(),
       ]);
       setLines(linesData);
       setStations(stationsData);
       setTrains(trainsData);
       setLegendItems(legendData);
       setTrainStops(stopsData);
+      setTrackSegments(segmentsData);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       toast({ title: 'Ошибка загрузки', description: errorMessage, variant: 'destructive' });
@@ -501,6 +504,65 @@ const Index = () => {
         return true;
       }
       // Многопутная станция - конфликта нет
+    }
+    
+    // Проверяем однопутные перегоны между станциями
+    const sortedStations = [...stations].sort((a, b) => (a.distance_km || a.position) - (b.distance_km || b.position));
+    
+    for (let i = 0; i < sortedStations.length - 1; i++) {
+      const stationA = sortedStations[i];
+      const stationB = sortedStations[i + 1];
+      
+      // Проверяем, есть ли однопутный перегон между этими станциями
+      const segment = trackSegments.find(seg => 
+        (seg.station_from_id === stationA.id && seg.station_to_id === stationB.id) ||
+        (seg.station_from_id === stationB.id && seg.station_to_id === stationA.id)
+      );
+      
+      if (!segment || !segment.is_single_track) continue;
+      
+      // Проверяем, проходят ли оба поезда через этот перегон
+      const train1Path = [d1, ...stops1.map(s => stations.find(st => st.id === s.station_id)), a1].filter(Boolean) as Station[];
+      const train2Path = [d2, ...stops2.map(s => stations.find(st => st.id === s.station_id)), a2].filter(Boolean) as Station[];
+      
+      const t1PassesSegment = train1Path.some(s => s.id === stationA.id) && train1Path.some(s => s.id === stationB.id);
+      const t2PassesSegment = train2Path.some(s => s.id === stationA.id) && train2Path.some(s => s.id === stationB.id);
+      
+      if (!t1PassesSegment || !t2PassesSegment) continue;
+      
+      // Рассчитываем время прохождения перегона для каждого поезда
+      const getSegmentTime = (train: Train, trainStops: typeof stops1, path: Station[]) => {
+        const aIndex = path.findIndex(s => s.id === stationA.id);
+        const bIndex = path.findIndex(s => s.id === stationB.id);
+        
+        if (aIndex === -1 || bIndex === -1) return null;
+        
+        const startStation = aIndex < bIndex ? stationA : stationB;
+        const endStation = aIndex < bIndex ? stationB : stationA;
+        
+        const startStop = trainStops.find(s => s.station_id === startStation.id);
+        const endStop = trainStops.find(s => s.station_id === endStation.id);
+        
+        const startTime = startStop ? startStop.departure_time : 
+          (train.departure_station_id === startStation.id ? train.departure_time : train.arrival_time);
+        const endTime = endStop ? endStop.arrival_time :
+          (train.arrival_station_id === endStation.id ? train.arrival_time : train.departure_time);
+        
+        return { start: startTime, end: endTime };
+      };
+      
+      const t1SegmentTime = getSegmentTime(t1, stops1, train1Path);
+      const t2SegmentTime = getSegmentTime(t2, stops2, train2Path);
+      
+      if (!t1SegmentTime || !t2SegmentTime) continue;
+      
+      // Проверяем пересечение времени на перегоне
+      const segmentTimeOverlap = t1SegmentTime.end >= t2SegmentTime.start && t2SegmentTime.end >= t1SegmentTime.start;
+      
+      if (segmentTimeOverlap) {
+        // На однопутном перегоне конфликт есть всегда, даже для встречных поездов
+        return true;
+      }
     }
     
     // Если встречные поезда и у них разные направления, конфликта нет (идут по разным путям)
@@ -1853,6 +1915,85 @@ const Index = () => {
                   </div>
                 </Card>
               ))}
+            </div>
+            
+            <div className="mt-8 pt-8 border-t">
+              <h3 className="text-lg font-bold mb-4">Перегоны между станциями</h3>
+              <Card className="p-4 mb-4 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+                <div className="flex items-start gap-3">
+                  <Icon name="Info" size={20} className="text-blue-600 dark:text-blue-400 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">Однопутные перегоны</p>
+                    <p className="text-blue-800 dark:text-blue-200 text-xs">
+                      Отметьте перегон как однопутный, если между станциями только один путь. 
+                      На таких перегонах конфликты возникают даже для встречных поездов.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+              
+              <div className="grid gap-3">
+                {stations.slice(0, -1).map((station, index) => {
+                  const nextStation = stations[index + 1];
+                  if (!nextStation) return null;
+                  
+                  const segment = trackSegments.find(seg => 
+                    (seg.station_from_id === station.id && seg.station_to_id === nextStation.id) ||
+                    (seg.station_from_id === nextStation.id && seg.station_to_id === station.id)
+                  );
+                  
+                  const isSingleTrack = segment?.is_single_track || false;
+                  
+                  return (
+                    <Card key={`${station.id}-${nextStation.id}`} className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-12 rounded ${isSingleTrack ? 'bg-red-500' : 'bg-green-500'}`} />
+                          <div>
+                            <div className="font-medium text-sm">
+                              {station.name} → {nextStation.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              Расстояние: {Math.abs((nextStation.distance_km || nextStation.position) - (station.distance_km || station.position)).toFixed(1)} км
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm cursor-pointer" htmlFor={`segment-${station.id}-${nextStation.id}`}>
+                              Однопутный
+                            </Label>
+                            <Switch
+                              id={`segment-${station.id}-${nextStation.id}`}
+                              checked={isSingleTrack}
+                              onCheckedChange={async (checked) => {
+                                try {
+                                  if (segment) {
+                                    await api.trackSegments.update({
+                                      ...segment,
+                                      is_single_track: checked,
+                                    });
+                                  } else {
+                                    await api.trackSegments.create({
+                                      station_from_id: station.id,
+                                      station_to_id: nextStation.id,
+                                      is_single_track: checked,
+                                    });
+                                  }
+                                  await loadData();
+                                  toast({ title: checked ? 'Перегон отмечен как однопутный' : 'Перегон отмечен как двухпутный' });
+                                } catch (error) {
+                                  toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
             </div>
           </TabsContent>
 

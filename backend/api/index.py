@@ -36,6 +36,11 @@ class TrainCreate(BaseModel):
     line_style: str = Field(default='solid')
     line_width: float = Field(default=2.5, ge=0.5, le=10)
 
+class TrackSegmentCreate(BaseModel):
+    station_from_id: int = Field(ge=1)
+    station_to_id: int = Field(ge=1)
+    is_single_track: bool = Field(default=False)
+
 def json_serial(obj):
     if isinstance(obj, datetime):
         return obj.isoformat()
@@ -70,6 +75,7 @@ def handle_get(cur, path: str, params: Dict[str, str]) -> Dict[str, Any]:
         ''', []),
         'trains': ('SELECT * FROM trains WHERE schedule_id = %s ORDER BY id', [params.get('schedule_id', '1')]),
         'legend': ('SELECT * FROM legend_items WHERE schedule_id = %s', [params.get('schedule_id', '1')]),
+        'track_segments': ('SELECT * FROM track_segments ORDER BY station_from_id, station_to_id', []),
     }
     
     if path == 'train_stops':
@@ -127,6 +133,15 @@ def handle_post(cur, conn, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
             DO UPDATE SET arrival_time = EXCLUDED.arrival_time, departure_time = EXCLUDED.departure_time
             RETURNING *
         ''', (data.get('train_id'), data.get('station_id'), data.get('arrival_time'), data.get('departure_time')))
+    elif path == 'track_segments':
+        validated = TrackSegmentCreate(**data)
+        cur.execute('''
+            INSERT INTO track_segments (station_from_id, station_to_id, is_single_track)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (station_from_id, station_to_id)
+            DO UPDATE SET is_single_track = EXCLUDED.is_single_track
+            RETURNING *
+        ''', (validated.station_from_id, validated.station_to_id, validated.is_single_track))
     else:
         return response(404, {'error': 'Unknown path'})
     
@@ -155,6 +170,9 @@ def handle_put(cur, conn, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
         'train_stops': ('''UPDATE train_stops SET station_id = %s, arrival_time = %s, 
                           departure_time = %s WHERE id = %s RETURNING *''',
                        [data.get('station_id'), data.get('arrival_time'), data.get('departure_time'), item_id]),
+        'track_segments': ('''UPDATE track_segments SET station_from_id = %s, station_to_id = %s, 
+                             is_single_track = %s WHERE id = %s RETURNING *''',
+                          [data.get('station_from_id'), data.get('station_to_id'), data.get('is_single_track'), item_id]),
     }
     
     if path not in updates:
@@ -184,6 +202,8 @@ def handle_delete(cur, conn, path: str, item_id: str) -> Dict[str, Any]:
         cur.execute('DELETE FROM trains WHERE id = %s RETURNING id', (int(item_id),))
     elif path == 'train_stops':
         cur.execute('DELETE FROM train_stops WHERE id = %s RETURNING id', (int(item_id),))
+    elif path == 'track_segments':
+        cur.execute('DELETE FROM track_segments WHERE id = %s RETURNING id', (int(item_id),))
     else:
         return response(404, {'error': 'Unknown path'})
     

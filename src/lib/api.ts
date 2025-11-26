@@ -58,6 +58,14 @@ export interface TrainStop {
   created_at?: string;
 }
 
+export interface TrackSegment {
+  id: number;
+  station_from_id: number;
+  station_to_id: number;
+  is_single_track: boolean;
+  created_at?: string;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}?path=${path}`, options);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -114,4 +122,5 @@ export const api = {
       }
     },
   },
+  trackSegments: createCRUD<TrackSegment>('track_segments'),
 };
