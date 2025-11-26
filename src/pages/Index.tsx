@@ -171,7 +171,7 @@ const Index = () => {
             
             currentTime += travelTime;
             const arrivalTime = currentTime;
-            const departureTime = currentTime + trainForm.default_stop_duration;
+            const departureTime = currentTime + (trainForm.default_stop_duration || 2);
             
             await api.trainStops.create({
               train_id: trainId,
@@ -1016,8 +1016,11 @@ const Index = () => {
                           type="number"
                           min="0"
                           max="60"
-                          value={trainForm.default_stop_duration}
-                          onChange={(e) => setTrainForm({ ...trainForm, default_stop_duration: parseInt(e.target.value) || 2 })}
+                          value={trainForm.default_stop_duration || 2}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setTrainForm({ ...trainForm, default_stop_duration: isNaN(val) ? 2 : val });
+                          }}
                           className="h-8"
                           placeholder="2"
                         />
@@ -1079,7 +1082,8 @@ const Index = () => {
                         }
                         
                         const totalTravelTime = Math.round((totalDistance / speedToUse) * 60);
-                        const totalStopTime = intermediateStations.length * trainForm.default_stop_duration;
+                        const stopDuration = trainForm.default_stop_duration || 2;
+                        const totalStopTime = intermediateStations.length * stopDuration;
                         
                         const calculatedArrivalTime = trainForm.departure_time + totalTravelTime + totalStopTime;
                         
@@ -1090,7 +1094,7 @@ const Index = () => {
                         
                         toast({ 
                           title: "Расчёт выполнен", 
-                          description: `Расстояние: ${totalDistance.toFixed(1)} км${speedMessage}, время в пути: ${Math.floor(totalTravelTime / 60)}ч ${totalTravelTime % 60}м, остановки: ${intermediateStations.length} × ${trainForm.default_stop_duration}м = ${totalStopTime}м` 
+                          description: `Расстояние: ${totalDistance.toFixed(1)} км${speedMessage}, время в пути: ${Math.floor(totalTravelTime / 60)}ч ${totalTravelTime % 60}м, остановки: ${intermediateStations.length} × ${stopDuration}м = ${totalStopTime}м` 
                         });
                       }}
                     >
