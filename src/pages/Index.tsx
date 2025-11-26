@@ -62,7 +62,7 @@ const Index = () => {
     line_style: 'solid' as 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'double',
     line_width: 2.5,
     average_speed: 60,
-    default_stop_duration: 2,
+    default_stop_duration: 0,
   });
 
   const [stationForm, setStationForm] = useState({
@@ -164,6 +164,10 @@ const Index = () => {
           let currentTime = trainForm.departure_time;
           let lastPos = depPos;
           
+          const stopDuration = (trainForm.default_stop_duration && trainForm.default_stop_duration > 0) 
+            ? trainForm.default_stop_duration 
+            : 0;
+          
           for (const station of intermediateStations) {
             const stationPos = station.distance_km || station.position;
             const distance = Math.abs(stationPos - lastPos);
@@ -171,7 +175,7 @@ const Index = () => {
             
             currentTime += travelTime;
             const arrivalTime = currentTime;
-            const departureTime = currentTime + (trainForm.default_stop_duration || 2);
+            const departureTime = currentTime + stopDuration;
             
             await api.trainStops.create({
               train_id: trainId,
@@ -203,7 +207,7 @@ const Index = () => {
         line_style: 'solid',
         line_width: 2.5,
         average_speed: 60,
-        default_stop_duration: 2,
+        default_stop_duration: 0,
       });
       setEditingTrain(null);
       setTrainDialogOpen(false);
@@ -318,7 +322,15 @@ const Index = () => {
       const totalDistance = Math.abs(arrPos - depPos);
       const totalTime = Math.abs(train.arrival_time - train.departure_time);
       const avgSpeed = train.average_speed || (totalDistance > 0 && totalTime > 0 ? (totalDistance / (totalTime / 60)) : 60);
-      const defaultStopDuration = train.default_stop_duration || 2;
+      
+      let defaultStopDuration: number;
+      if (train.default_stop_duration && train.default_stop_duration > 0) {
+        defaultStopDuration = train.default_stop_duration;
+      } else if (existingStops.length > 0) {
+        defaultStopDuration = Math.round(existingStops.reduce((sum, s) => sum + s.stop_duration, 0) / existingStops.length);
+      } else {
+        defaultStopDuration = 0;
+      }
       
       if (existingStops.length === 0) {
         const distance = Math.abs(stationPos - depPos);
@@ -1016,15 +1028,17 @@ const Index = () => {
                           type="number"
                           min="0"
                           max="60"
-                          value={trainForm.default_stop_duration || 2}
+                          value={trainForm.default_stop_duration || ''}
                           onChange={(e) => {
-                            const val = parseInt(e.target.value);
-                            setTrainForm({ ...trainForm, default_stop_duration: isNaN(val) ? 2 : val });
+                            const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                            setTrainForm({ ...trainForm, default_stop_duration: isNaN(val) ? 0 : val });
                           }}
                           className="h-8"
-                          placeholder="2"
+                          placeholder="Авто"
                         />
-                        <p className="text-xs text-muted-foreground">По умолчанию: 2 минуты</p>
+                        <p className="text-xs text-muted-foreground">
+                          Если не указано: рассчитывается из существующих остановок, или 0 если остановок нет
+                        </p>
                       </div>
                     </details>
                     <Button
@@ -1082,7 +1096,26 @@ const Index = () => {
                         }
                         
                         const totalTravelTime = Math.round((totalDistance / speedToUse) * 60);
-                        const stopDuration = trainForm.default_stop_duration || 2;
+                        
+                        let stopDuration: number;
+                        let stopMessage = '';
+                        
+                        if (trainForm.default_stop_duration && trainForm.default_stop_duration > 0) {
+                          stopDuration = trainForm.default_stop_duration;
+                        } else {
+                          const existingStops = editingTrain 
+                            ? trainStops.filter(s => s.train_id === editingTrain.id)
+                            : [];
+                          
+                          if (existingStops.length > 0) {
+                            stopDuration = Math.round(existingStops.reduce((sum, s) => sum + s.stop_duration, 0) / existingStops.length);
+                            stopMessage = ` (рассчитано из существующих остановок)`;
+                          } else {
+                            stopDuration = 0;
+                            stopMessage = ` (нет остановок)`;
+                          }
+                        }
+                        
                         const totalStopTime = intermediateStations.length * stopDuration;
                         
                         const calculatedArrivalTime = trainForm.departure_time + totalTravelTime + totalStopTime;
@@ -1094,7 +1127,7 @@ const Index = () => {
                         
                         toast({ 
                           title: "Расчёт выполнен", 
-                          description: `Расстояние: ${totalDistance.toFixed(1)} км${speedMessage}, время в пути: ${Math.floor(totalTravelTime / 60)}ч ${totalTravelTime % 60}м, остановки: ${intermediateStations.length} × ${stopDuration}м = ${totalStopTime}м` 
+                          description: `Расстояние: ${totalDistance.toFixed(1)} км${speedMessage}, время в пути: ${Math.floor(totalTravelTime / 60)}ч ${totalTravelTime % 60}м, остановки: ${intermediateStations.length} × ${stopDuration}м${stopMessage} = ${totalStopTime}м` 
                         });
                       }}
                     >
