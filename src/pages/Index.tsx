@@ -866,8 +866,11 @@ const Index = () => {
                   <Card className="p-4 space-y-3 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
                     <div className="flex items-center gap-2">
                       <Icon name="Zap" size={18} className="text-blue-600 dark:text-blue-400" />
-                      <Label className="text-blue-900 dark:text-blue-100">Автоматический расчёт</Label>
+                      <Label className="text-blue-900 dark:text-blue-100">Автоматический расчёт маршрута</Label>
                     </div>
+                    <p className="text-xs text-blue-800 dark:text-blue-200">
+                      Время прибытия = время в пути + стоянки на всех промежуточных станциях
+                    </p>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
                         <Label className="text-xs">Средняя скорость (км/ч)</Label>
@@ -904,11 +907,26 @@ const Index = () => {
                           return;
                         }
                         
-                        const distance = Math.abs((arrStation.distance_km || arrStation.position) - (depStation.distance_km || depStation.position));
-                        const travelTimeHours = distance / trainForm.average_speed;
-                        const travelTimeMinutes = Math.round(travelTimeHours * 60);
+                        const sortedStations = [...stations].sort((a, b) => 
+                          (a.distance_km || a.position) - (b.distance_km || b.position)
+                        );
                         
-                        const calculatedArrivalTime = trainForm.departure_time + travelTimeMinutes;
+                        const depPos = depStation.distance_km || depStation.position;
+                        const arrPos = arrStation.distance_km || arrStation.position;
+                        const isReverse = depPos > arrPos;
+                        
+                        const intermediateStations = sortedStations.filter(s => {
+                          const pos = s.distance_km || s.position;
+                          return isReverse 
+                            ? pos < depPos && pos > arrPos && s.id !== trainForm.departure_station_id && s.id !== trainForm.arrival_station_id
+                            : pos > depPos && pos < arrPos && s.id !== trainForm.departure_station_id && s.id !== trainForm.arrival_station_id;
+                        });
+                        
+                        const totalDistance = Math.abs(arrPos - depPos);
+                        const totalTravelTime = Math.round((totalDistance / trainForm.average_speed) * 60);
+                        const totalStopTime = intermediateStations.length * trainForm.default_stop_duration;
+                        
+                        const calculatedArrivalTime = trainForm.departure_time + totalTravelTime + totalStopTime;
                         
                         setTrainForm({ 
                           ...trainForm, 
@@ -917,7 +935,7 @@ const Index = () => {
                         
                         toast({ 
                           title: "Расчёт выполнен", 
-                          description: `Расстояние: ${distance.toFixed(1)} км, время в пути: ${Math.floor(travelTimeMinutes / 60)}ч ${travelTimeMinutes % 60}м` 
+                          description: `Расстояние: ${totalDistance.toFixed(1)} км, время в пути: ${Math.floor(totalTravelTime / 60)}ч ${totalTravelTime % 60}м, остановки: ${intermediateStations.length} × ${trainForm.default_stop_duration}м = ${totalStopTime}м` 
                         });
                       }}
                     >
@@ -1490,6 +1508,19 @@ const Index = () => {
 
           <TabsContent value="analytics" className="mt-4 md:mt-6">
             <div className="grid gap-4">
+              <Card className="p-4 mb-4 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+                <div className="flex items-start gap-3">
+                  <Icon name="Info" size={20} className="text-blue-600 dark:text-blue-400 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">Как рассчитываются показатели</p>
+                    <ul className="text-blue-800 dark:text-blue-200 space-y-1 text-xs">
+                      <li>• <strong>Средняя скорость:</strong> Рассчитывается только по времени в движении (без учёта стоянок)</li>
+                      <li>• <strong>Средняя стоянка:</strong> Сумма всех стоянок / количество остановок</li>
+                      <li>• <strong>Время в движении:</strong> Общее время маршрута минус суммарное время стоянок</li>
+                    </ul>
+                  </div>
+                </div>
+              </Card>
               <Card className="p-4 md:p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg md:text-xl font-bold">Средняя скорость поездов</h3>
@@ -1507,6 +1538,7 @@ const Index = () => {
                     
                     const stops = trainStops.filter(stop => stop.train_id === train.id);
                     const totalStopTime = stops.reduce((sum, stop) => sum + stop.stop_duration, 0);
+                    const avgStopTime = stops.length > 0 ? (totalStopTime / stops.length).toFixed(1) : 0;
                     const totalTime = Math.abs(train.arrival_time - train.departure_time);
                     const movingTime = totalTime - totalStopTime;
                     
@@ -1521,7 +1553,7 @@ const Index = () => {
                             </div>
                             {totalStopTime > 0 && (
                               <div className="text-xs text-muted-foreground">
-                                {stops.length} {stops.length === 1 ? 'остановка' : 'остановки'} • {totalStopTime} мин стоянки
+                                {stops.length} {stops.length === 1 ? 'остановка' : 'остановки'} • Средняя стоянка: {avgStopTime} мин
                               </div>
                             )}
                           </div>
