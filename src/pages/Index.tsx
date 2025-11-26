@@ -289,13 +289,76 @@ const Index = () => {
   };
 
   const saveTrainStop = async () => {
-    if (!selectedTrainForStops) return;
+    if (!selectedTrainForStops || stopForm.station_id === 0) return;
+    
     try {
-      const arrival_time = stopForm.arrival_hours * 60 + stopForm.arrival_minutes;
-      const departure_time = stopForm.departure_hours * 60 + stopForm.departure_minutes;
+      const train = selectedTrainForStops;
+      const station = stations.find(s => s.id === stopForm.station_id);
+      if (!station) return;
+      
+      const depStation = stations.find(s => s.id === train.departure_station_id);
+      const arrStation = stations.find(s => s.id === train.arrival_station_id);
+      if (!depStation || !arrStation) return;
+      
+      const depPos = depStation.distance_km || depStation.position;
+      const arrPos = arrStation.distance_km || arrStation.position;
+      const stationPos = station.distance_km || station.position;
+      
+      const existingStops = trainStops
+        .filter(s => s.train_id === train.id)
+        .map(s => {
+          const st = stations.find(station => station.id === s.station_id);
+          return { ...s, position: st ? (st.distance_km || st.position) : 0 };
+        })
+        .sort((a, b) => depPos < arrPos ? a.position - b.position : b.position - a.position);
+      
+      let arrival_time: number;
+      let departure_time: number;
+      
+      const totalDistance = Math.abs(arrPos - depPos);
+      const totalTime = Math.abs(train.arrival_time - train.departure_time);
+      const avgSpeed = train.average_speed || (totalDistance > 0 && totalTime > 0 ? (totalDistance / (totalTime / 60)) : 60);
+      const defaultStopDuration = train.default_stop_duration || 2;
+      
+      if (existingStops.length === 0) {
+        const distance = Math.abs(stationPos - depPos);
+        const travelTime = Math.round((distance / avgSpeed) * 60);
+        arrival_time = train.departure_time + travelTime;
+        departure_time = arrival_time + defaultStopDuration;
+      } else {
+        let prevStop = existingStops[0];
+        let prevTime = train.departure_time;
+        let prevPos = depPos;
+        
+        for (const stop of existingStops) {
+          const isForward = depPos < arrPos;
+          const shouldInsertBefore = isForward 
+            ? stationPos < stop.position
+            : stationPos > stop.position;
+          
+          if (shouldInsertBefore) {
+            const distance = Math.abs(stationPos - prevPos);
+            const travelTime = Math.round((distance / avgSpeed) * 60);
+            arrival_time = prevTime + travelTime;
+            departure_time = arrival_time + defaultStopDuration;
+            break;
+          }
+          
+          prevStop = stop;
+          prevTime = stop.departure_time;
+          prevPos = stop.position;
+        }
+        
+        if (arrival_time === undefined) {
+          const distance = Math.abs(stationPos - prevPos);
+          const travelTime = Math.round((distance / avgSpeed) * 60);
+          arrival_time = prevTime + travelTime;
+          departure_time = arrival_time + defaultStopDuration;
+        }
+      }
       
       await api.trainStops.create({
-        train_id: selectedTrainForStops.id,
+        train_id: train.id,
         station_id: stopForm.station_id,
         arrival_time,
         departure_time,
@@ -2192,7 +2255,13 @@ const Index = () => {
             <div className="space-y-4 py-4">
               <div className="space-y-3">
                 <h4 className="font-medium">Добавить остановку</h4>
-                <div className="grid grid-cols-2 gap-4">
+                <Card className="p-3 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900 mb-3">
+                  <div className="flex items-start gap-2 text-xs text-blue-800 dark:text-blue-200">
+                    <Icon name="Info" size={14} className="mt-0.5 flex-shrink-0" />
+                    <p>Время прибытия и отправления рассчитывается автоматически на основе расстояния и средней скорости поезда</p>
+                  </div>
+                </Card>
+                <div className="space-y-3">
                   <div className="space-y-2">
                     <Label>Станция</Label>
                     <Select value={String(stopForm.station_id || '0')} onValueChange={(value) => setStopForm({ ...stopForm, station_id: parseInt(value) })}>
@@ -2208,66 +2277,14 @@ const Index = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Время прибытия (ч:мм)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="23"
-                        placeholder="ЧЧ"
-                        value={stopForm.arrival_hours}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setStopForm({ ...stopForm, arrival_hours: value === '' ? 0 : Math.max(0, Math.min(23, parseInt(value))) });
-                        }}
-                        onFocus={(e) => e.target.select()}
-                      />
-                      <Input
-                        type="number"
-                        min="0"
-                        max="59"
-                        placeholder="ММ"
-                        value={stopForm.arrival_minutes}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setStopForm({ ...stopForm, arrival_minutes: value === '' ? 0 : Math.max(0, Math.min(59, parseInt(value))) });
-                        }}
-                        onFocus={(e) => e.target.select()}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <Label>Время отправления (ч:мм)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="23"
-                        placeholder="ЧЧ"
-                        value={stopForm.departure_hours}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setStopForm({ ...stopForm, departure_hours: value === '' ? 0 : Math.max(0, Math.min(23, parseInt(value))) });
-                        }}
-                        onFocus={(e) => e.target.select()}
-                      />
-                      <Input
-                        type="number"
-                        min="0"
-                        max="59"
-                        placeholder="ММ"
-                        value={stopForm.departure_minutes}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setStopForm({ ...stopForm, departure_minutes: value === '' ? 0 : Math.max(0, Math.min(59, parseInt(value))) });
-                        }}
-                        onFocus={(e) => e.target.select()}
-                      />
-                    </div>
-                  </div>
+                  <Button 
+                    onClick={saveTrainStop} 
+                    className="w-full"
+                    disabled={stopForm.station_id === 0}
+                  >
+                    Добавить остановку
+                  </Button>
                 </div>
-                <Button onClick={saveTrainStop} className="w-full">Добавить остановку</Button>
               </div>
 
               <div className="border-t pt-4">
