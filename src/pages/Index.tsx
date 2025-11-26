@@ -1232,25 +1232,14 @@ const Index = () => {
                         {points.map((point, idx) => {
                           const isFirst = idx === 0;
                           const isLast = idx === points.length - 1;
-                          const isStopStart = point.isStop && points[idx + 1]?.y === point.y;
                           const isStopEnd = point.isStop && points[idx - 1]?.y === point.y;
                           
                           return (
                             <g key={`point-${idx}`}>
-                              {/* Круги на старте и финише, квадраты на остановках */}
-                              {isFirst || isLast ? (
+                              {/* Круги только на старте и финише */}
+                              {(isFirst || isLast) && (
                                 <circle cx={point.x} cy={point.y} r="4" fill={train.color} />
-                              ) : point.isStop ? (
-                                <rect
-                                  x={point.x - 3}
-                                  y={point.y - 3}
-                                  width="6"
-                                  height="6"
-                                  fill={train.color}
-                                  stroke="#FFFFFF"
-                                  strokeWidth="1"
-                                />
-                              ) : null}
+                              )}
                               
                               {/* Время на старте и финише */}
                               {(isFirst || isLast) && (
@@ -1665,19 +1654,11 @@ const Index = () => {
                   </div>
                 ))}
                 
-                <div className="space-y-3 mt-6 pt-4 border-t">
-                  <div className="flex items-center gap-4">
-                    <svg width="20" height="20">
-                      <circle cx="10" cy="10" r="5" fill="#0EA5E9" />
-                    </svg>
-                    <span>Точка отправления/прибытия</span>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <svg width="20" height="20">
-                      <rect x="4" y="4" width="12" height="12" fill="#0EA5E9" stroke="#FFFFFF" strokeWidth="1.5" />
-                    </svg>
-                    <span>Остановочный пункт</span>
-                  </div>
+                <div className="flex items-center gap-4 mt-6 pt-4 border-t">
+                  <svg width="20" height="20">
+                    <circle cx="10" cy="10" r="5" fill="#0EA5E9" />
+                  </svg>
+                  <span>Точка отправления/прибытия</span>
                 </div>
               </div>
             </Card>
