@@ -42,6 +42,7 @@ const Index = () => {
   const [editingLegend, setEditingLegend] = useState<LegendItem | null>(null);
   const [selectedTrainForStops, setSelectedTrainForStops] = useState<Train | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'train' | 'station' | 'line' | 'stop', id: number } | null>(null);
+  const [editingStop, setEditingStop] = useState<TrainStop | null>(null);
   const [stopForm, setStopForm] = useState({
     station_id: 0,
     arrival_hours: 0,
@@ -59,6 +60,8 @@ const Index = () => {
     arrival_time: 480,
     line_style: 'solid' as 'solid' | 'dashed' | 'dotted' | 'dash-dot' | 'double',
     line_width: 2.5,
+    average_speed: 60,
+    default_stop_duration: 2,
   });
 
   const [stationForm, setStationForm] = useState({
@@ -121,12 +124,70 @@ const Index = () => {
         color,
       };
 
+      let trainId: number;
+      
       if (editingTrain) {
         await api.trains.update({ ...trainData, id: editingTrain.id });
+        trainId = editingTrain.id;
         toast({ title: 'Поезд обновлён' });
       } else {
-        await api.trains.create(trainData);
+        const newTrain = await api.trains.create(trainData);
+        trainId = newTrain.id;
         toast({ title: 'Поезд добавлен' });
+      }
+
+      if (!editingTrain) {
+        const depStation = stations.find(s => s.id === trainForm.departure_station_id);
+        const arrStation = stations.find(s => s.id === trainForm.arrival_station_id);
+        
+        if (depStation && arrStation) {
+          const sortedStations = [...stations].sort((a, b) => 
+            (a.distance_km || a.position) - (b.distance_km || b.position)
+          );
+          
+          const depPos = depStation.distance_km || depStation.position;
+          const arrPos = arrStation.distance_km || arrStation.position;
+          const isReverse = depPos > arrPos;
+          
+          const intermediateStations = sortedStations.filter(s => {
+            const pos = s.distance_km || s.position;
+            return isReverse 
+              ? pos < depPos && pos > arrPos && s.id !== trainForm.departure_station_id && s.id !== trainForm.arrival_station_id
+              : pos > depPos && pos < arrPos && s.id !== trainForm.departure_station_id && s.id !== trainForm.arrival_station_id;
+          });
+          
+          if (isReverse) intermediateStations.reverse();
+          
+          let currentTime = trainForm.departure_time;
+          let lastPos = depPos;
+          
+          for (const station of intermediateStations) {
+            const stationPos = station.distance_km || station.position;
+            const distance = Math.abs(stationPos - lastPos);
+            const travelTime = Math.round((distance / trainForm.average_speed) * 60);
+            
+            currentTime += travelTime;
+            const arrivalTime = currentTime;
+            const departureTime = currentTime + trainForm.default_stop_duration;
+            
+            await api.trainStops.create({
+              train_id: trainId,
+              station_id: station.id,
+              arrival_time: arrivalTime,
+              departure_time: departureTime,
+            });
+            
+            currentTime = departureTime;
+            lastPos = stationPos;
+          }
+          
+          if (intermediateStations.length > 0) {
+            toast({ 
+              title: 'Остановки созданы', 
+              description: `Автоматически добавлено ${intermediateStations.length} остановок` 
+            });
+          }
+        }
       }
 
       setTrainForm({
@@ -138,6 +199,8 @@ const Index = () => {
         arrival_time: 480,
         line_style: 'solid',
         line_width: 2.5,
+        average_speed: 60,
+        default_stop_duration: 2,
       });
       setEditingTrain(null);
       setTrainDialogOpen(false);
@@ -800,6 +863,68 @@ const Index = () => {
                       </div>
                     </div>
                   </div>
+                  <Card className="p-4 space-y-3 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+                    <div className="flex items-center gap-2">
+                      <Icon name="Zap" size={18} className="text-blue-600 dark:text-blue-400" />
+                      <Label className="text-blue-900 dark:text-blue-100">Автоматический расчёт</Label>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Средняя скорость (км/ч)</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="300"
+                          value={trainForm.average_speed}
+                          onChange={(e) => setTrainForm({ ...trainForm, average_speed: parseInt(e.target.value) || 60 })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Стоянка по умолчанию (мин)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="60"
+                          value={trainForm.default_stop_duration}
+                          onChange={(e) => setTrainForm({ ...trainForm, default_stop_duration: parseInt(e.target.value) || 2 })}
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        const depStation = stations.find(s => s.id === trainForm.departure_station_id);
+                        const arrStation = stations.find(s => s.id === trainForm.arrival_station_id);
+                        
+                        if (!depStation || !arrStation) {
+                          toast({ title: "Выберите станции отправления и прибытия", variant: "destructive" });
+                          return;
+                        }
+                        
+                        const distance = Math.abs((arrStation.distance_km || arrStation.position) - (depStation.distance_km || depStation.position));
+                        const travelTimeHours = distance / trainForm.average_speed;
+                        const travelTimeMinutes = Math.round(travelTimeHours * 60);
+                        
+                        const calculatedArrivalTime = trainForm.departure_time + travelTimeMinutes;
+                        
+                        setTrainForm({ 
+                          ...trainForm, 
+                          arrival_time: calculatedArrivalTime >= 24 * 60 ? 23 * 60 + 59 : calculatedArrivalTime 
+                        });
+                        
+                        toast({ 
+                          title: "Расчёт выполнен", 
+                          description: `Расстояние: ${distance.toFixed(1)} км, время в пути: ${Math.floor(travelTimeMinutes / 60)}ч ${travelTimeMinutes % 60}м` 
+                        });
+                      }}
+                    >
+                      <Icon name="Calculator" size={16} className="mr-2" />
+                      Рассчитать время прибытия
+                    </Button>
+                  </Card>
                   <div className="space-y-2">
                     <Label>Стиль линии</Label>
                     <Select value={trainForm.line_style} onValueChange={(value: any) => setTrainForm({ ...trainForm, line_style: value })}>
@@ -1948,7 +2073,80 @@ const Index = () => {
               </div>
 
               <div className="border-t pt-4">
-                <h4 className="font-medium mb-3">Текущие остановки</h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium">Текущие остановки</h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (!selectedTrainForStops) return;
+                      
+                      const currentStops = trainStops.filter(s => s.train_id === selectedTrainForStops.id);
+                      for (const stop of currentStops) {
+                        await api.trainStops.delete(stop.id);
+                      }
+                      
+                      const depStation = stations.find(s => s.id === selectedTrainForStops.departure_station_id);
+                      const arrStation = stations.find(s => s.id === selectedTrainForStops.arrival_station_id);
+                      
+                      if (!depStation || !arrStation) {
+                        toast({ title: "Ошибка", description: "Станции не найдены", variant: "destructive" });
+                        return;
+                      }
+                      
+                      const sortedStations = [...stations].sort((a, b) => 
+                        (a.distance_km || a.position) - (b.distance_km || b.position)
+                      );
+                      
+                      const depPos = depStation.distance_km || depStation.position;
+                      const arrPos = arrStation.distance_km || arrStation.position;
+                      const isReverse = depPos > arrPos;
+                      
+                      const intermediateStations = sortedStations.filter(s => {
+                        const pos = s.distance_km || s.position;
+                        return isReverse 
+                          ? pos < depPos && pos > arrPos && s.id !== selectedTrainForStops.departure_station_id && s.id !== selectedTrainForStops.arrival_station_id
+                          : pos > depPos && pos < arrPos && s.id !== selectedTrainForStops.departure_station_id && s.id !== selectedTrainForStops.arrival_station_id;
+                      });
+                      
+                      if (isReverse) intermediateStations.reverse();
+                      
+                      const avgSpeed = 60;
+                      const stopDuration = 2;
+                      let currentTime = selectedTrainForStops.departure_time;
+                      let lastPos = depPos;
+                      
+                      for (const station of intermediateStations) {
+                        const stationPos = station.distance_km || station.position;
+                        const distance = Math.abs(stationPos - lastPos);
+                        const travelTime = Math.round((distance / avgSpeed) * 60);
+                        
+                        currentTime += travelTime;
+                        const arrivalTime = currentTime;
+                        const departureTime = currentTime + stopDuration;
+                        
+                        await api.trainStops.create({
+                          train_id: selectedTrainForStops.id,
+                          station_id: station.id,
+                          arrival_time: arrivalTime,
+                          departure_time: departureTime,
+                        });
+                        
+                        currentTime = departureTime;
+                        lastPos = stationPos;
+                      }
+                      
+                      await loadData();
+                      toast({ 
+                        title: 'Остановки пересчитаны', 
+                        description: `Создано ${intermediateStations.length} остановок (60 км/ч, 2 мин стоянка)` 
+                      });
+                    }}
+                  >
+                    <Icon name="RefreshCw" size={14} className="mr-1" />
+                    Пересчитать
+                  </Button>
+                </div>
                 <div className="space-y-2">
                   {trainStops
                     .filter(stop => stop.train_id === selectedTrainForStops.id)
@@ -1956,23 +2154,119 @@ const Index = () => {
                     .map(stop => {
                       const station = stations.find(s => s.id === stop.station_id);
                       return (
-                        <div key={stop.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
+                        <div key={stop.id} className="p-3 border rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
                             <div className="font-medium">{station?.name}</div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingStop(stop);
+                                  setStopForm({
+                                    station_id: stop.station_id,
+                                    arrival_hours: Math.floor(stop.arrival_time / 60),
+                                    arrival_minutes: stop.arrival_time % 60,
+                                    departure_hours: Math.floor(stop.departure_time / 60),
+                                    departure_minutes: stop.departure_time % 60,
+                                  });
+                                }}
+                              >
+                                <Icon name="Edit" size={16} />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  setDeleteTarget({ type: 'stop', id: stop.id });
+                                  setDeleteDialogOpen(true);
+                                }}
+                              >
+                                <Icon name="Trash2" size={16} />
+                              </Button>
+                            </div>
+                          </div>
+                          {editingStop?.id === stop.id ? (
+                            <div className="space-y-2 pt-2 border-t">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs">Прибытие (ч:мм)</Label>
+                                  <div className="flex gap-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="23"
+                                      value={stopForm.arrival_hours}
+                                      onChange={(e) => setStopForm({ ...stopForm, arrival_hours: parseInt(e.target.value) || 0 })}
+                                      className="text-sm h-8"
+                                    />
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="59"
+                                      value={stopForm.arrival_minutes}
+                                      onChange={(e) => setStopForm({ ...stopForm, arrival_minutes: parseInt(e.target.value) || 0 })}
+                                      className="text-sm h-8"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Отправление (ч:мм)</Label>
+                                  <div className="flex gap-1">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="23"
+                                      value={stopForm.departure_hours}
+                                      onChange={(e) => setStopForm({ ...stopForm, departure_hours: parseInt(e.target.value) || 0 })}
+                                      className="text-sm h-8"
+                                    />
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      max="59"
+                                      value={stopForm.departure_minutes}
+                                      onChange={(e) => setStopForm({ ...stopForm, departure_minutes: parseInt(e.target.value) || 0 })}
+                                      className="text-sm h-8"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  className="flex-1"
+                                  onClick={async () => {
+                                    const arrivalTime = stopForm.arrival_hours * 60 + stopForm.arrival_minutes;
+                                    const departureTime = stopForm.departure_hours * 60 + stopForm.departure_minutes;
+                                    
+                                    await api.trainStops.update({
+                                      ...stop,
+                                      arrival_time: arrivalTime,
+                                      departure_time: departureTime,
+                                    });
+                                    
+                                    setEditingStop(null);
+                                    await loadData();
+                                    toast({ title: 'Остановка обновлена' });
+                                  }}
+                                >
+                                  Сохранить
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setEditingStop(null)}
+                                >
+                                  Отмена
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
                             <div className="text-sm text-muted-foreground">
                               Прибытие: {formatTime(stop.arrival_time)} • Отправление: {formatTime(stop.departure_time)} • Стоянка: {stop.stop_duration} мин
                             </div>
-                          </div>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              setDeleteTarget({ type: 'stop', id: stop.id });
-                              setDeleteDialogOpen(true);
-                            }}
-                          >
-                            <Icon name="Trash2" size={16} />
-                          </Button>
+                          )}
                         </div>
                       );
                     })}
