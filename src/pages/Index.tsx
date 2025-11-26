@@ -1553,7 +1553,7 @@ const Index = () => {
                   })}
                   
                   {/* Линии движения поездов */}
-                  {trains.map(train => {
+                  {trains.map((train, trainIndex) => {
                     const depStation = stations.find(s => s.id === train.departure_station_id);
                     const arrStation = stations.find(s => s.id === train.arrival_station_id);
                     if (!depStation || !arrStation) return null;
@@ -1671,11 +1671,14 @@ const Index = () => {
                               {(isFirst || isLast) && (
                                 <text
                                   x={point.x}
-                                  y={point.y - 8}
+                                  y={point.y - 8 - (trainIndex % 2) * 12}
                                   textAnchor="middle"
                                   fill="hsl(var(--foreground))"
                                   fontSize="11"
                                   fontWeight="bold"
+                                  stroke="hsl(var(--card))"
+                                  strokeWidth="2.5"
+                                  paintOrder="stroke"
                                 >
                                   {formatTime(point.time)}
                                 </text>
@@ -1685,11 +1688,14 @@ const Index = () => {
                               {isStopEnd && point.stopDuration && (
                                 <text
                                   x={(points[idx - 1].x + point.x) / 2}
-                                  y={point.y + 15}
+                                  y={point.y + 15 + (trainIndex % 3) * 10}
                                   textAnchor="middle"
                                   fill={train.color}
                                   fontSize="9"
                                   fontWeight="bold"
+                                  stroke="hsl(var(--card))"
+                                  strokeWidth="2"
+                                  paintOrder="stroke"
                                 >
                                   {point.stopDuration} мин
                                 </text>
@@ -1699,21 +1705,32 @@ const Index = () => {
                         })}
                         
                         {/* Номер поезда */}
-                        <text
-                          x={(startX + endX) / 2}
-                          y={(startY + endY) / 2 - 10}
-                          textAnchor="middle"
-                          fill={train.color}
-                          fontSize="11"
-                          fontFamily="'Courier New', monospace"
-                          fontWeight="600"
-                          stroke="hsl(var(--card))"
-                          strokeWidth="3"
-                          paintOrder="stroke"
-                          transform={`rotate(${Math.atan2(endY - startY, endX - startX) * (180 / Math.PI)}, ${(startX + endX) / 2}, ${(startY + endY) / 2 - 10})`}
-                        >
-                          {train.number}
-                        </text>
+                        {(() => {
+                          const angle = Math.atan2(endY - startY, endX - startX);
+                          const labelOffset = 12 + (trainIndex % 3) * 8;
+                          const perpX = -Math.sin(angle) * labelOffset;
+                          const perpY = Math.cos(angle) * labelOffset;
+                          const centerX = (startX + endX) / 2;
+                          const centerY = (startY + endY) / 2;
+                          
+                          return (
+                            <text
+                              x={centerX + perpX}
+                              y={centerY + perpY}
+                              textAnchor="middle"
+                              fill={train.color}
+                              fontSize="11"
+                              fontFamily="'Courier New', monospace"
+                              fontWeight="600"
+                              stroke="hsl(var(--card))"
+                              strokeWidth="3"
+                              paintOrder="stroke"
+                              transform={`rotate(${angle * (180 / Math.PI)}, ${centerX + perpX}, ${centerY + perpY})`}
+                            >
+                              {train.number}
+                            </text>
+                          );
+                        })()}
                       </g>
                     );
                   })}
