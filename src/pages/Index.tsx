@@ -1011,7 +1011,7 @@ const Index = () => {
                           x2={x}
                           y2={(stations.length > 0 ? 80 + Math.max(...stations.map(s => (s.distance_km || s.position))) * 7.56 + 50 : 550)}
                           stroke="#000000"
-                          strokeWidth={isHourMark ? '2' : '1'}
+                          strokeWidth={isHourMark ? '1.5' : '0.5'}
                           strokeDasharray={isHalfHourMark ? '5,5' : '0'}
                         />
                         {isHourMark && hour <= 24 && (
