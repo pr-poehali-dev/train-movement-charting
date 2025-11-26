@@ -631,12 +631,41 @@ const Index = () => {
       
       if (!t1SegmentTime || !t2SegmentTime) continue;
       
+      // Проверяем направление движения на перегоне
+      const aIndex1 = train1Path.findIndex(s => s.id === stationA.id);
+      const bIndex1 = train1Path.findIndex(s => s.id === stationB.id);
+      const aIndex2 = train2Path.findIndex(s => s.id === stationA.id);
+      const bIndex2 = train2Path.findIndex(s => s.id === stationB.id);
+      
+      const t1Forward = aIndex1 < bIndex1; // A->B
+      const t2Forward = aIndex2 < bIndex2; // A->B
+      const sameDirection = t1Forward === t2Forward;
+      
       // Проверяем пересечение времени на перегоне
       const segmentTimeOverlap = t1SegmentTime.end >= t2SegmentTime.start && t2SegmentTime.end >= t1SegmentTime.start;
       
       if (segmentTimeOverlap) {
-        // На однопутном перегоне конфликт есть всегда, даже для встречных поездов
-        return true;
+        // Встречные поезда на однопутном перегоне всегда конфликтуют
+        if (!sameDirection) {
+          return true;
+        }
+        
+        // Попутные поезда: проверяем догон
+        // Если первый поезд отправился раньше
+        if (t1SegmentTime.start < t2SegmentTime.start) {
+          // Но второй прибыл раньше или одновременно - значит догнал (конфликт)
+          if (t2SegmentTime.end <= t1SegmentTime.end) {
+            return true;
+          }
+        } else if (t2SegmentTime.start < t1SegmentTime.start) {
+          // Второй отправился раньше, но первый прибыл раньше - догнал
+          if (t1SegmentTime.end <= t2SegmentTime.end) {
+            return true;
+          }
+        } else {
+          // Отправились одновременно - конфликт
+          return true;
+        }
       }
     }
     
