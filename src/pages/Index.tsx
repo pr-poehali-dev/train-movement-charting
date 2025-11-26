@@ -127,7 +127,6 @@ const Index = () => {
         toast({ title: 'Поезд добавлен' });
       }
 
-      await loadData();
       setTrainForm({
         number: '',
         type: 'freight',
@@ -140,6 +139,7 @@ const Index = () => {
       });
       setEditingTrain(null);
       setTrainDialogOpen(false);
+      await loadData();
     } catch (error) {
       toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
     }
@@ -174,10 +174,10 @@ const Index = () => {
         toast({ title: 'Линия добавлена' });
       }
 
-      await loadData();
       setLineForm({ name: '', color: '#0EA5E9' });
       setEditingLine(null);
       setLineDialogOpen(false);
+      await loadData();
     } catch (error) {
       toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
     }
@@ -188,9 +188,9 @@ const Index = () => {
     try {
       await api.legend.update(editingLegend);
       toast({ title: 'Легенда обновлена' });
-      await loadData();
       setEditingLegend(null);
       setLegendDialogOpen(false);
+      await loadData();
     } catch (error) {
       toast({ title: 'Ошибка', description: String(error), variant: 'destructive' });
     }
@@ -657,10 +657,17 @@ const Index = () => {
                           placeholder="ЧЧ"
                           value={Math.floor(trainForm.departure_time / 60)}
                           onChange={(e) => {
-                            const hours = parseInt(e.target.value) || 0;
+                            const value = e.target.value;
+                            if (value === '') {
+                              const minutes = trainForm.departure_time % 60;
+                              setTrainForm({ ...trainForm, departure_time: minutes });
+                              return;
+                            }
+                            const hours = Math.max(0, Math.min(23, parseInt(value)));
                             const minutes = trainForm.departure_time % 60;
                             setTrainForm({ ...trainForm, departure_time: hours * 60 + minutes });
                           }}
+                          onFocus={(e) => e.target.select()}
                         />
                         <Input
                           type="number"
@@ -669,10 +676,17 @@ const Index = () => {
                           placeholder="ММ"
                           value={trainForm.departure_time % 60}
                           onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              const hours = Math.floor(trainForm.departure_time / 60);
+                              setTrainForm({ ...trainForm, departure_time: hours * 60 });
+                              return;
+                            }
                             const hours = Math.floor(trainForm.departure_time / 60);
-                            const minutes = parseInt(e.target.value) || 0;
+                            const minutes = Math.max(0, Math.min(59, parseInt(value)));
                             setTrainForm({ ...trainForm, departure_time: hours * 60 + minutes });
                           }}
+                          onFocus={(e) => e.target.select()}
                         />
                       </div>
                     </div>
@@ -686,10 +700,17 @@ const Index = () => {
                           placeholder="ЧЧ"
                           value={Math.floor(trainForm.arrival_time / 60)}
                           onChange={(e) => {
-                            const hours = parseInt(e.target.value) || 0;
+                            const value = e.target.value;
+                            if (value === '') {
+                              const minutes = trainForm.arrival_time % 60;
+                              setTrainForm({ ...trainForm, arrival_time: minutes });
+                              return;
+                            }
+                            const hours = Math.max(0, Math.min(23, parseInt(value)));
                             const minutes = trainForm.arrival_time % 60;
                             setTrainForm({ ...trainForm, arrival_time: hours * 60 + minutes });
                           }}
+                          onFocus={(e) => e.target.select()}
                         />
                         <Input
                           type="number"
@@ -698,10 +719,17 @@ const Index = () => {
                           placeholder="ММ"
                           value={trainForm.arrival_time % 60}
                           onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              const hours = Math.floor(trainForm.arrival_time / 60);
+                              setTrainForm({ ...trainForm, arrival_time: hours * 60 });
+                              return;
+                            }
                             const hours = Math.floor(trainForm.arrival_time / 60);
-                            const minutes = parseInt(e.target.value) || 0;
+                            const minutes = Math.max(0, Math.min(59, parseInt(value)));
                             setTrainForm({ ...trainForm, arrival_time: hours * 60 + minutes });
                           }}
+                          onFocus={(e) => e.target.select()}
                         />
                       </div>
                     </div>
@@ -1428,7 +1456,11 @@ const Index = () => {
                         type="number"
                         min="0"
                         value={stationForm.position}
-                        onChange={(e) => setStationForm({ ...stationForm, position: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setStationForm({ ...stationForm, position: value === '' ? 0 : Math.max(0, parseInt(value)) });
+                        }}
+                        onFocus={(e) => e.target.select()}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1438,7 +1470,11 @@ const Index = () => {
                         min="0"
                         step="0.1"
                         value={stationForm.distance_km}
-                        onChange={(e) => setStationForm({ ...stationForm, distance_km: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setStationForm({ ...stationForm, distance_km: value === '' ? 0 : Math.max(0, parseFloat(value)) });
+                        }}
+                        onFocus={(e) => e.target.select()}
                       />
                     </div>
                     <div className="space-y-2">
@@ -1713,7 +1749,11 @@ const Index = () => {
                         max="23"
                         placeholder="ЧЧ"
                         value={stopForm.arrival_hours}
-                        onChange={(e) => setStopForm({ ...stopForm, arrival_hours: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setStopForm({ ...stopForm, arrival_hours: value === '' ? 0 : Math.max(0, Math.min(23, parseInt(value))) });
+                        }}
+                        onFocus={(e) => e.target.select()}
                       />
                       <Input
                         type="number"
@@ -1721,7 +1761,11 @@ const Index = () => {
                         max="59"
                         placeholder="ММ"
                         value={stopForm.arrival_minutes}
-                        onChange={(e) => setStopForm({ ...stopForm, arrival_minutes: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setStopForm({ ...stopForm, arrival_minutes: value === '' ? 0 : Math.max(0, Math.min(59, parseInt(value))) });
+                        }}
+                        onFocus={(e) => e.target.select()}
                       />
                     </div>
                   </div>
@@ -1734,7 +1778,11 @@ const Index = () => {
                         max="23"
                         placeholder="ЧЧ"
                         value={stopForm.departure_hours}
-                        onChange={(e) => setStopForm({ ...stopForm, departure_hours: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setStopForm({ ...stopForm, departure_hours: value === '' ? 0 : Math.max(0, Math.min(23, parseInt(value))) });
+                        }}
+                        onFocus={(e) => e.target.select()}
                       />
                       <Input
                         type="number"
@@ -1742,7 +1790,11 @@ const Index = () => {
                         max="59"
                         placeholder="ММ"
                         value={stopForm.departure_minutes}
-                        onChange={(e) => setStopForm({ ...stopForm, departure_minutes: parseInt(e.target.value) || 0 })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setStopForm({ ...stopForm, departure_minutes: value === '' ? 0 : Math.max(0, Math.min(59, parseInt(value))) });
+                        }}
+                        onFocus={(e) => e.target.select()}
                       />
                     </div>
                   </div>
