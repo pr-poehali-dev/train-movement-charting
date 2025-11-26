@@ -15,6 +15,8 @@ export interface Station {
   line_id?: number;
   line_name?: string;
   line_color?: string;
+  tracks_count?: number;
+  has_siding?: boolean;
   created_at?: string;
 }
 

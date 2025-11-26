@@ -8,7 +8,9 @@
       "expectedBody": {
         "0": {
           "id": "number",
-          "name": "string"
+          "name": "string",
+          "tracks_count": "number",
+          "has_siding": "boolean"
         }
       },
       "bodyMatcher": "partial"

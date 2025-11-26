@@ -21,6 +21,8 @@ class StationCreate(BaseModel):
     position: int = Field(ge=0)
     distance_km: float = Field(ge=0)
     line_id: Optional[int] = None
+    tracks_count: int = Field(default=2, ge=1, le=10)
+    has_siding: bool = Field(default=False)
 
 class TrainCreate(BaseModel):
     schedule_id: int = Field(default=1, ge=1)
@@ -60,7 +62,7 @@ def handle_get(cur, path: str, params: Dict[str, str]) -> Dict[str, Any]:
     routes = {
         'lines': ('SELECT * FROM lines ORDER BY id', []),
         'stations': ('''
-            SELECT s.id, s.name, s.position, s.distance_km, s.line_id, s.created_at,
+            SELECT s.id, s.name, s.position, s.distance_km, s.line_id, s.tracks_count, s.has_siding, s.created_at,
                    l.name as line_name, l.color as line_color 
             FROM stations s 
             LEFT JOIN lines l ON s.line_id = l.id 
@@ -105,8 +107,8 @@ def handle_post(cur, conn, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
                    (validated.name, validated.color))
     elif path == 'stations':
         validated = StationCreate(**data)
-        cur.execute('INSERT INTO stations (name, position, distance_km, line_id) VALUES (%s, %s, %s, %s) RETURNING *',
-                   (validated.name, validated.position, validated.distance_km, validated.line_id))
+        cur.execute('INSERT INTO stations (name, position, distance_km, line_id, tracks_count, has_siding) VALUES (%s, %s, %s, %s, %s, %s) RETURNING *',
+                   (validated.name, validated.position, validated.distance_km, validated.line_id, validated.tracks_count, validated.has_siding))
     elif path == 'trains':
         validated = TrainCreate(**data)
         cur.execute('''
@@ -140,8 +142,8 @@ def handle_put(cur, conn, path: str, data: Dict[str, Any]) -> Dict[str, Any]:
     updates = {
         'lines': ('UPDATE lines SET name = %s, color = %s WHERE id = %s RETURNING *',
                  [data.get('name'), data.get('color'), item_id]),
-        'stations': ('UPDATE stations SET name = %s, position = %s, distance_km = %s, line_id = %s WHERE id = %s RETURNING *',
-                    [data.get('name'), data.get('position'), data.get('distance_km'), data.get('line_id'), item_id]),
+        'stations': ('UPDATE stations SET name = %s, position = %s, distance_km = %s, line_id = %s, tracks_count = %s, has_siding = %s WHERE id = %s RETURNING *',
+                    [data.get('name'), data.get('position'), data.get('distance_km'), data.get('line_id'), data.get('tracks_count', 2), data.get('has_siding', False), item_id]),
         'trains': ('''UPDATE trains SET number = %s, type = %s, departure_station_id = %s, 
                      arrival_station_id = %s, departure_time = %s, arrival_time = %s, 
                      color = %s, line_style = %s, line_width = %s WHERE id = %s RETURNING *''',

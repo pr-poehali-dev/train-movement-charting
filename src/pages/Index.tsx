@@ -66,6 +66,8 @@ const Index = () => {
     position: 0,
     distance_km: 0,
     line_id: undefined as number | undefined,
+    tracks_count: 2,
+    has_siding: false,
   });
 
   const [lineForm, setLineForm] = useState({
@@ -155,7 +157,7 @@ const Index = () => {
         toast({ title: 'Станция добавлена' });
       }
 
-      setStationForm({ name: '', position: 0, distance_km: 0, line_id: undefined });
+      setStationForm({ name: '', position: 0, distance_km: 0, line_id: undefined, tracks_count: 2, has_siding: false });
       setEditingStation(null);
       setStationDialogOpen(false);
       await loadData();
@@ -274,6 +276,8 @@ const Index = () => {
       position: station.position,
       distance_km: station.distance_km || 0,
       line_id: station.line_id,
+      tracks_count: station.tracks_count || 2,
+      has_siding: station.has_siding || false,
     });
     setStationDialogOpen(true);
   };
@@ -365,11 +369,7 @@ const Index = () => {
     const t2Number = parseInt(t2.number.replace(/\D/g, '')) || 0;
     const t1IsEven = t1Number % 2 === 0;
     const t2IsEven = t2Number % 2 === 0;
-    
-    // Если поезда движутся в разных направлениях (разные пути), конфликта нет
-    if (t1IsEven !== t2IsEven) {
-      return false;
-    }
+    const oppositeDirections = t1IsEven !== t2IsEven;
     
     const x1 = t1.departure_time;
     const x2 = t1.arrival_time;
@@ -381,13 +381,72 @@ const Index = () => {
     const y3 = d2.distance_km;
     const y4 = a2.distance_km;
     
+    // Получаем остановки для обоих поездов
+    const stops1 = trainStops.filter(s => s.train_id === t1.id);
+    const stops2 = trainStops.filter(s => s.train_id === t2.id);
+    
+    // Проверяем пересечение траекторий
     const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
     if (Math.abs(denom) < 0.001) return false;
     
     const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
     const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
     
-    return t > 0 && t < 1 && u > 0 && u < 1;
+    const hasIntersection = t > 0 && t < 1 && u > 0 && u < 1;
+    
+    if (!hasIntersection) return false;
+    
+    // Если траектории пересекаются, проверяем станции на пути
+    const allStations = [d1, a1, d2, a2, ...stops1.map(s => stations.find(st => st.id === s.station_id)), ...stops2.map(s => stations.find(st => st.id === s.station_id))].filter(Boolean) as Station[];
+    const uniqueStations = Array.from(new Set(allStations.map(s => s.id))).map(id => allStations.find(s => s.id === id)!);
+    
+    // Проверяем каждую станцию на пути пересечения
+    for (const station of uniqueStations) {
+      const tracksCount = station.tracks_count || 2;
+      const hasSiding = station.has_siding || false;
+      
+      // Проверяем, проходят ли оба поезда через эту станцию
+      const train1PassesHere = [d1.id, a1.id, ...stops1.map(s => s.station_id)].includes(station.id);
+      const train2PassesHere = [d2.id, a2.id, ...stops2.map(s => s.station_id)].includes(station.id);
+      
+      if (!train1PassesHere || !train2PassesHere) continue;
+      
+      // Находим время прохождения/стоянки на этой станции
+      const stop1 = stops1.find(s => s.station_id === station.id);
+      const stop2 = stops2.find(s => s.station_id === station.id);
+      
+      const t1AtStation = stop1 || (d1.id === station.id ? { arrival_time: x1, departure_time: x1 } : { arrival_time: x2, departure_time: x2 });
+      const t2AtStation = stop2 || (d2.id === station.id ? { arrival_time: x3, departure_time: x3 } : { arrival_time: x4, departure_time: x4 });
+      
+      const t1Start = t1AtStation.arrival_time;
+      const t1End = t1AtStation.departure_time;
+      const t2Start = t2AtStation.arrival_time;
+      const t2End = t2AtStation.departure_time;
+      
+      // Проверяем пересечение времени
+      const timeOverlap = t1End >= t2Start && t2End >= t1Start;
+      
+      if (!timeOverlap) continue;
+      
+      if (tracksCount === 1) {
+        // Однопутная станция
+        if (hasSiding && oppositeDirections && stop1 && stop2) {
+          // Есть разъезд и оба поезда останавливаются (встречные могут разъехаться)
+          continue;
+        }
+        // В остальных случаях - конфликт
+        return true;
+      }
+      // Многопутная станция - конфликта нет
+    }
+    
+    // Если встречные поезда и у них разные направления, конфликта нет (идут по разным путям)
+    if (oppositeDirections) {
+      return false;
+    }
+    
+    // Если направление одинаковое и траектории пересекаются - конфликт
+    return hasIntersection;
   };
 
   const detectConflicts = () => {
@@ -1356,12 +1415,15 @@ const Index = () => {
               </Card>
 
               <Card className="p-4 md:p-6">
-                <h3 className="text-lg md:text-xl font-bold mb-4">
+                <h3 className="text-lg md:text-xl font-bold mb-2">
                   Конфликты маршрутов
                   {conflicts.length > 0 && (
                     <span className="ml-2 text-destructive">({conflicts.length})</span>
                   )}
                 </h3>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Учитывается количество путей станций. Встречные поезда (чётные/нечётные) на однопутных станциях с разъездом могут пересекаться во время стоянки.
+                </p>
                 {conflicts.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Icon name="CheckCircle2" size={48} className="mx-auto mb-2 text-green-500" />
@@ -1387,7 +1449,16 @@ const Index = () => {
                                 <span>Поезд {conflict.train2.number}</span>
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                Пересечение маршрутов в одно время
+                                {(() => {
+                                  const t1Number = parseInt(conflict.train1.number.replace(/\D/g, '')) || 0;
+                                  const t2Number = parseInt(conflict.train2.number.replace(/\D/g, '')) || 0;
+                                  const oppositeDirections = (t1Number % 2) !== (t2Number % 2);
+                                  
+                                  if (oppositeDirections) {
+                                    return 'Встречные поезда на однопутном участке без разъезда';
+                                  }
+                                  return 'Пересечение маршрутов в одно время';
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -1415,7 +1486,12 @@ const Index = () => {
                           <Icon name={isMetroMode ? "TramFront" : "Train"} size={24} style={{ color: train.color }} />
                         </div>
                         <div>
-                          <div className="font-bold text-lg">{train.number}</div>
+                          <div className="font-bold text-lg flex items-center gap-2">
+                            {train.number}
+                            <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                              {parseInt(train.number.replace(/\D/g, '')) % 2 === 0 ? 'Чётный' : 'Нечётный'}
+                            </span>
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             {legendItem?.label}
                           </div>
@@ -1453,6 +1529,19 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="stations" className="mt-6">
+            <Card className="p-4 mb-4 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900">
+              <div className="flex items-start gap-3">
+                <Icon name="Info" size={20} className="text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">Настройка путей и разъездов</p>
+                  <ul className="text-blue-800 dark:text-blue-200 space-y-1 text-xs">
+                    <li>• <strong>Количество путей:</strong> Определяет, могут ли встречные поезда находиться на станции одновременно</li>
+                    <li>• <strong>Разъезд:</strong> Для однопутных станций позволяет встречным поездам (чётные/нечётные) разъезжаться во время стоянки</li>
+                    <li>• <strong>Направление:</strong> Чётные и нечётные номера поездов движутся по разным путям</li>
+                  </ul>
+                </div>
+              </div>
+            </Card>
             <div className="mb-4">
               <Dialog open={stationDialogOpen} onOpenChange={setStationDialogOpen}>
                 <DialogTrigger asChild>
@@ -1514,6 +1603,33 @@ const Index = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>Количество путей</Label>
+                      <Select value={String(stationForm.tracks_count)} onValueChange={(value) => setStationForm({ ...stationForm, tracks_count: parseInt(value) })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1 путь (однопутная)</SelectItem>
+                          <SelectItem value="2">2 пути (двухпутная)</SelectItem>
+                          <SelectItem value="3">3 пути</SelectItem>
+                          <SelectItem value="4">4 пути</SelectItem>
+                          <SelectItem value="5">5 путей</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {stationForm.tracks_count === 1 && (
+                      <div className="flex items-center space-x-2">
+                        <Switch 
+                          id="siding" 
+                          checked={stationForm.has_siding} 
+                          onCheckedChange={(checked) => setStationForm({ ...stationForm, has_siding: checked })} 
+                        />
+                        <Label htmlFor="siding" className="cursor-pointer">
+                          Есть разъезд (для встречных поездов)
+                        </Label>
+                      </div>
+                    )}
                     <Button onClick={saveStation} className="w-full">
                       {editingStation ? 'Сохранить' : 'Добавить'}
                     </Button>
@@ -1535,6 +1651,12 @@ const Index = () => {
                         <div className="text-sm text-muted-foreground">
                           Позиция: {station.position + 1}
                           {isMetroMode && station.line_name && ` • Линия: ${station.line_name}`}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                          <span>Путей: {station.tracks_count || 2}</span>
+                          {station.tracks_count === 1 && station.has_siding && (
+                            <span className="text-green-600 dark:text-green-400">• Есть разъезд</span>
+                          )}
                         </div>
                       </div>
                     </div>
