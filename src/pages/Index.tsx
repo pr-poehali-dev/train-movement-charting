@@ -994,34 +994,34 @@ const Index = () => {
                       <Label className="text-blue-900 dark:text-blue-100">Автоматический расчёт маршрута</Label>
                     </div>
                     <p className="text-xs text-blue-800 dark:text-blue-200">
-                      Нажмите кнопку ниже, чтобы автоматически рассчитать время прибытия с остановками на всех промежуточных станциях.
-                      По умолчанию: скорость 60 км/ч, стоянка 2 минуты.
+                      Укажите среднюю скорость для расчёта времени прибытия. Время стоянки необязательно.
                     </p>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Средняя скорость (км/ч)</Label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="300"
+                        value={trainForm.average_speed}
+                        onChange={(e) => setTrainForm({ ...trainForm, average_speed: parseInt(e.target.value) || 60 })}
+                        className="h-9"
+                        placeholder="60"
+                      />
+                    </div>
                     <details className="text-xs">
-                      <summary className="cursor-pointer text-blue-700 dark:text-blue-300 font-medium mb-2">⚙️ Настроить параметры</summary>
-                      <div className="grid grid-cols-2 gap-3 mt-2">
-                        <div className="space-y-2">
-                          <Label className="text-xs">Средняя скорость (км/ч)</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            max="300"
-                            value={trainForm.average_speed}
-                            onChange={(e) => setTrainForm({ ...trainForm, average_speed: parseInt(e.target.value) || 60 })}
-                            className="h-8"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-xs">Стоянка по умолчанию (мин)</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            max="60"
-                            value={trainForm.default_stop_duration}
-                            onChange={(e) => setTrainForm({ ...trainForm, default_stop_duration: parseInt(e.target.value) || 2 })}
-                            className="h-8"
-                          />
-                        </div>
+                      <summary className="cursor-pointer text-blue-700 dark:text-blue-300 font-medium">⚙️ Настроить время стоянки (опционально)</summary>
+                      <div className="space-y-2 mt-2">
+                        <Label className="text-xs">Стоянка по умолчанию (мин)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="60"
+                          value={trainForm.default_stop_duration}
+                          onChange={(e) => setTrainForm({ ...trainForm, default_stop_duration: parseInt(e.target.value) || 2 })}
+                          className="h-8"
+                          placeholder="2"
+                        />
+                        <p className="text-xs text-muted-foreground">По умолчанию: 2 минуты</p>
                       </div>
                     </details>
                     <Button
